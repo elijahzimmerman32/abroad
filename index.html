@@ -568,37 +568,46 @@ Write ${name}'s next turn. Return only a JSON object:
     if (!SR || S.micBlocked || !S.active) return setStatus("idle");
     stopListening();
     const my = turnId;
-    rec = new SR(); rec.lang = L().bcp; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
-    let finalText = "", heard = false;
+    const me = (rec = new SR()); me.lang = L().bcp; me.interimResults = true; me.continuous = false; me.maxAlternatives = 1;
+    // Some phone browsers never mark a result as final, or keep the mic open after you stop
+    // talking. So we also finish on our own after a short silence, using whatever was heard.
+    let heardText = "", heard = false, finished = false, silence = null;
     const bubble = addMsg("me", "…", { interim: true });
-    rec.onresult = (e) => {
-      heard = true; let interim = ""; finalText = "";
-      for (const r of e.results) (r.isFinal ? (finalText += r[0].transcript) : (interim += r[0].transcript));
-      bubble.querySelector(".text").textContent = (finalText + " " + interim).trim() || "…";
+    const finish = () => {
+      if (finished) return; finished = true; clearTimeout(silence);
+      if (rec === me) rec = null;
+      try { me.abort(); } catch {}
+      bubble.remove();
+      if (my !== turnId) return;
+      const text = heardText.trim();
+      if (!text) {
+        if (S.micBlocked || !S.active) return setStatus("idle");
+        if (!heard && ++noSpeech < 3) return listen();
+        noSpeech = 0; S.active = false; return setStatus("paused");
+      }
+      noSpeech = 0; handleUser(text);
     };
-    rec.onerror = (e) => {
+    me.onresult = (e) => {
+      heard = true; let text = "", allFinal = true;
+      for (const r of e.results) { text += r[0].transcript; if (!r.isFinal) allFinal = false; }
+      heardText = text;
+      bubble.querySelector(".text").textContent = text.trim() || "…";
+      clearTimeout(silence);
+      if (allFinal && text.trim()) finish(); else silence = setTimeout(finish, 1300);
+    };
+    me.onerror = (e) => {
       if (e.error === "not-allowed" || e.error === "service-not-allowed" || e.error === "audio-capture") {
         S.micBlocked = true; S.handsFree = false;
         showMicNote("The microphone isn't available here, so type your answers below. The local still speaks out loud. The full hands-free version runs from its own web address.");
         $("stage-hint").textContent = "The mic is off here. Type your answer below.";
       }
     };
-    rec.onend = () => {
-      rec = null;
-      if (my !== turnId) { bubble.remove(); return; }
-      const text = finalText.trim();
-      if (!text) {
-        bubble.remove();
-        if (S.micBlocked || !S.active) return setStatus("idle");
-        if (!heard && ++noSpeech < 3) return listen();
-        noSpeech = 0; S.active = false; return setStatus("paused");
-      }
-      noSpeech = 0; bubble.remove(); handleUser(text);
-    };
+    me.onend = finish;
+    me.cancel = () => { finished = true; clearTimeout(silence); bubble.remove(); try { me.abort(); } catch {} };
     setStatus("listening");
-    try { rec.start(); } catch { bubble.remove(); setStatus("idle"); }
+    try { me.start(); } catch { finished = true; bubble.remove(); rec = null; setStatus("idle"); }
   }
-  function stopListening() { if (rec) { try { rec.abort(); } catch {} rec = null; } }
+  function stopListening() { if (rec) { const r = rec; rec = null; r.cancel ? r.cancel() : r.abort(); } }
 
   // ---------- Conversation ----------
   function setStatus(st) {
@@ -777,11 +786,22 @@ Write ${name}'s next turn. Return only a JSON object:
         hear.onclick = () => speak(it.target, L().bcp, targetRate());
         if (!SR || S.micBlocked) { say.disabled = true; say.title = "The microphone isn't available here"; }
         say.onclick = () => {
-          const r = new SR(); r.lang = L().bcp; r.interimResults = false; say.textContent = "Listening…";
-          r.onresult = (e) => { const t = e.results[0][0].transcript; res.hidden = false; grade(res, similarity(t, it.target), it.target); res.insertAdjacentText("beforeend", ` · You said: "${t}"`); };
+          const r = new SR(); r.lang = L().bcp; r.interimResults = true; say.textContent = "Listening…";
+          let heardText = "", done = false, silence = null;
+          const finish = () => {
+            if (done) return; done = true; clearTimeout(silence); try { r.abort(); } catch {}
+            say.textContent = "Say it";
+            if (heardText.trim()) { res.hidden = false; grade(res, similarity(heardText, it.target), it.target); res.insertAdjacentText("beforeend", ` · You said: "${heardText.trim()}"`); }
+          };
+          r.onresult = (e) => {
+            let t = "", allFinal = true;
+            for (const x of e.results) { t += x[0].transcript; if (!x.isFinal) allFinal = false; }
+            heardText = t; clearTimeout(silence);
+            if (allFinal && t.trim()) finish(); else silence = setTimeout(finish, 1300);
+          };
           r.onerror = (e) => { if (e.error === "not-allowed" || e.error === "service-not-allowed") { S.micBlocked = true; say.disabled = true; res.hidden = false; res.className = "result"; res.textContent = "The microphone isn't available here. Use Hear it and repeat out loud."; } };
-          r.onend = () => { say.textContent = "Say it"; };
-          try { r.start(); } catch {}
+          r.onend = finish;
+          try { r.start(); } catch { done = true; say.textContent = "Say it"; }
         };
       }
       $("cards").append(c);
