@@ -139,6 +139,17 @@ h2 { font: 700 13px/1.2 var(--font-body); text-transform: uppercase; letter-spac
 .result.good .score { color: var(--listen); }
 .result.close .score { color: var(--accent); }
 .result.miss .score { color: var(--warn); }
+.ask { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; display: grid; gap: 4px; }
+.label { font: 700 11px/1.2 var(--font-body); text-transform: uppercase; letter-spacing: .09em; color: var(--muted); }
+.ask .q { font: 700 19px/1.3 var(--font-display); }
+.ask .q-en { color: var(--muted); font-size: 15px; font-style: italic; }
+.ghost.small { padding: 5px 12px; font-size: 13px; margin-top: 4px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1.5px solid var(--line); background: var(--bg); border-radius: 999px; padding: 6px 12px; font-size: 14px; font-weight: 700; text-align: left; }
+.chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.seg.mini { max-width: 240px; }
+.seg.mini button { padding: 7px 4px; font-size: 14px; }
+.body { display: grid; gap: 10px; }
 .practice-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
 
 /* Tab bar */
@@ -258,13 +269,6 @@ h2 { font: 700 13px/1.2 var(--font-body); text-transform: uppercase; letter-spac
     { id: "intermediate", label: "Getting there", cefr: "B1", rate: 0.93, rule: "Use everyday language at a natural but clear pace. One or two sentences." },
     { id: "advanced", label: "Confident", cefr: "C1", rate: 1.0, rule: "Speak naturally like a real local, with idioms where they fit. Up to two sentences." },
   ];
-  // Starter practice set (café), shown before any set is generated.
-  const STARTER = [
-    { en: "Good morning! A coffee, please.", es: "¡Buenos días! Un café, por favor.", fr: "Bonjour ! Un café, s'il vous plaît.", it: "Buongiorno! Un caffè, per favore.", pt: "Bom dia! Um café, por favor.", de: "Guten Morgen! Einen Kaffee, bitte.", el: "Καλημέρα! Έναν καφέ, παρακαλώ." },
-    { en: "How much is it?", es: "¿Cuánto es?", fr: "C'est combien ?", it: "Quant'è?", pt: "Quanto é?", de: "Was kostet das?", el: "Πόσο κάνει;" },
-    { en: "Can I pay by card?", es: "¿Puedo pagar con tarjeta?", fr: "Je peux payer par carte ?", it: "Posso pagare con la carta?", pt: "Posso pagar com cartão?", de: "Kann ich mit Karte zahlen?", el: "Μπορώ να πληρώσω με κάρτα;" },
-    { en: "Where is the bathroom?", es: "¿Dónde está el baño?", fr: "Où sont les toilettes ?", it: "Dov'è il bagno?", pt: "Onde é a casa de banho?", de: "Wo ist die Toilette?", el: "Πού είναι η τουαλέτα;" },
-  ];
   // Spoken commands, matched in English and each language.
   const COMMANDS = {
     repeat: ["repeat", "again", "repite", "repitelo", "otra vez", "repete", "repetez", "encore", "ripeti", "ripeta", "di nuovo", "repita", "outra vez", "wiederholen", "wiederhole", "noch einmal", "nochmal", "επαναλαβε", "ξανα"],
@@ -276,108 +280,249 @@ h2 { font: 700 13px/1.2 var(--font-body); text-transform: uppercase; letter-spac
 
   // ---------- Free mode: scripted scenes (no AI needed) ----------
   // Every text array is in this order: Spanish, French, Italian, Portuguese (Portugal), German, Greek.
+  // Keywords are matched as whole words after accents and punctuation are removed; "*" means "starts with".
+  // When an answer matches several options, the option with the longest matching keyword wins.
   const LO = ["es", "fr", "it", "pt", "de", "el"];
   const T = (a) => Object.fromEntries(LO.map((l, i) => [l, a[i]]));
-  const K = (a) => Object.fromEntries(LO.map((l, i) => [l, a[i]]));  // keywords: normalized words, "*" = word start
+  // O(english, answer in each language, keywords per language or null, local's reaction?, reaction in English?)
+  const O = (en, say, k, r, ren, extra) => ({ en, say: T(say), k: k ? T(k) : null, r: r ? T(r) : null, ren: ren || "", ...extra });
   const FILL = {
-    es: { place: "Plaza Mayor", dest: "Barcelona", dish: "paella", sight: "the Prado Museum", city: "Madrid" },
-    fr: { place: "the Louvre", dest: "Lyon", dish: "boeuf bourguignon", sight: "the Musée d'Orsay", city: "Paris" },
-    it: { place: "the Colosseum", dest: "Florence", dish: "carbonara", sight: "the Vatican Museums", city: "Rome" },
-    pt: { place: "Praça do Comércio", dest: "Porto", dish: "bacalhau à Brás (salt cod)", sight: "the Jerónimos Monastery", city: "Lisbon" },
-    de: { place: "the Brandenburg Gate", dest: "Hamburg", dish: "schnitzel", sight: "Museum Island", city: "Berlin" },
-    el: { place: "the Acropolis", dest: "Thessaloniki", dish: "moussaka", sight: "the Acropolis Museum", city: "Athens" },
+    es: { place: "Plaza Mayor", dest: "Barcelona", dest2: "Seville", dish: "paella", sight: "the Prado Museum", city: "Madrid", market: "Mercado de San Miguel" },
+    fr: { place: "the Louvre", dest: "Lyon", dest2: "Marseille", dish: "boeuf bourguignon", sight: "the Musée d'Orsay", city: "Paris", market: "the Marché des Enfants Rouges" },
+    it: { place: "the Colosseum", dest: "Florence", dest2: "Venice", dish: "carbonara", sight: "the Vatican Museums", city: "Rome", market: "the Campo de' Fiori market" },
+    pt: { place: "Praça do Comércio", dest: "Porto", dest2: "Coimbra", dish: "bacalhau à Brás (salt cod)", sight: "the Jerónimos Monastery", city: "Lisbon", market: "Mercado da Ribeira" },
+    de: { place: "the Brandenburg Gate", dest: "Hamburg", dest2: "Munich", dish: "schnitzel", sight: "Museum Island", city: "Berlin", market: "Markthalle Neun" },
+    el: { place: "the Acropolis", dest: "Thessaloniki", dest2: "Patras", dish: "moussaka", sight: "the Acropolis Museum", city: "Athens", market: "the Varvakios market" },
   };
   const SORRY = T(["¿Perdón?", "Pardon ?", "Scusi?", "Desculpe?", "Wie bitte?", "Συγγνώμη;"]);
-  const YES = K([["si", "vale", "claro"], ["oui", "bien sur"], ["si", "certo"], ["sim", "claro"], ["ja", "gerne", "gern"], ["ναι", "βεβαιως"]]);
-  const NOK = K([["no"], ["non"], ["no"], ["nao"], ["nein"], ["οχι"]]);
-  const NO_THANKS = { en: "No, thank you.", k: NOK, say: T(["No, gracias.", "Non, merci.", "No, grazie.", "Não, obrigado.", "Nein, danke.", "Όχι, ευχαριστώ."]) };
-  const FROM_US = { en: "I'm from the United States.", say: T(["Soy de Estados Unidos.", "Je viens des États-Unis.", "Sono degli Stati Uniti.", "Sou dos Estados Unidos.", "Ich komme aus den USA.", "Είμαι από την Αμερική."]) };
+  const YES = [["si", "vale", "claro", "perfecto"], ["oui", "parfait", "bien sur"], ["si", "certo", "va bene"], ["sim", "claro", "pode ser"], ["ja", "passt", "gut"], ["ναι", "εντάξει"]];
+  const NO = [["no"], ["non"], ["no"], ["nao"], ["nein"], ["οχι"]];
+  const THANKS = [["gracias"], ["merci"], ["grazie"], ["obrigad*"], ["danke", "dank"], ["ευχαριστω"]];
+  const WATER = [["agua"], ["eau"], ["acqua"], ["agua"], ["wasser"], ["νερο"]];
+  const NO_THANKS = O("No, thank you.", ["No, gracias.", "Non, merci.", "No, grazie.", "Não, obrigado.", "Nein, danke.", "Όχι, ευχαριστώ."], NO);
+  const FROM = [
+    O("I'm from the United States.", ["Soy de Estados Unidos.", "Je viens des États-Unis.", "Sono degli Stati Uniti.", "Sou dos Estados Unidos.", "Ich komme aus den USA.", "Είμαι από την Αμερική."],
+      [["estados unidos", "america", "eeuu"], ["etats unis", "amerique"], ["stati uniti", "america"], ["estados unidos", "america"], ["usa", "amerika", "vereinigten staaten"], ["αμερικη", "ηπα"]]),
+    O("I'm from Canada.", ["Soy de Canadá.", "Je viens du Canada.", "Sono del Canada.", "Sou do Canadá.", "Ich komme aus Kanada.", "Είμαι από τον Καναδά."],
+      [["canada"], ["canada"], ["canada"], ["canada"], ["kanada"], ["καναδα"]]),
+    O("I'm from England.", ["Soy de Inglaterra.", "Je viens d'Angleterre.", "Vengo dall'Inghilterra.", "Sou de Inglaterra.", "Ich komme aus England.", "Είμαι από την Αγγλία."],
+      [["inglaterra", "reino unido"], ["angleterre"], ["inghilterra"], ["inglaterra"], ["england"], ["αγγλια"]]),
+  ];
+
   const FREE = {
     cafe: { steps: [
       { en: "Good morning! What would you like?", p: T(["¡Buenos días! ¿Qué le pongo?", "Bonjour ! Qu'est-ce que je vous sers ?", "Buongiorno! Cosa le preparo?", "Bom dia! O que deseja?", "Guten Morgen! Was darf es sein?", "Καλημέρα! Τι θα πάρετε;"]), o: [
-        { en: "A coffee, please.", k: K([["cafe"], ["cafe"], ["caffe", "cafe", "espresso", "cappuccino"], ["cafe", "bica"], ["kaffee", "espresso"], ["καφε", "εσπρεσο"]]), say: T(["Un café, por favor.", "Un café, s'il vous plaît.", "Un caffè, per favore.", "Um café, por favor.", "Einen Kaffee, bitte.", "Έναν καφέ, παρακαλώ."]) },
-        { en: "A tea, please.", k: K([["te"], ["the"], ["te", "the"], ["cha"], ["tee"], ["τσαι"]]), say: T(["Un té, por favor.", "Un thé, s'il vous plaît.", "Un tè, per favore.", "Um chá, por favor.", "Einen Tee, bitte.", "Ένα τσάι, παρακαλώ."]) } ] },
-      { en: "Anything to eat? We have croissants and toast.", p: T(["¿Algo para comer? Tenemos cruasanes y tostadas.", "Et avec ceci ? Nous avons des croissants et des tartines.", "Qualcosa da mangiare? Abbiamo cornetti e toast.", "Mais alguma coisa para comer? Temos croissants e torradas.", "Etwas zu essen? Wir haben Croissants und Toast.", "Κάτι να φάτε; Έχουμε κρουασάν και τοστ."]), o: [
-        { en: "A croissant, please.", k: K([["cruasan*", "croissant*"], ["croissant*"], ["cornett*", "croissant*"], ["croissant*"], ["croissant*"], ["κρουασαν*"]]), say: T(["Un cruasán, por favor.", "Un croissant, s'il vous plaît.", "Un cornetto, per favore.", "Um croissant, por favor.", "Ein Croissant, bitte.", "Ένα κρουασάν, παρακαλώ."]) },
-        { en: "Toast, please.", k: K([["tostada*"], ["tartine*"], ["toast"], ["torrada*"], ["toast"], ["τοστ"]]), say: T(["Una tostada, por favor.", "Une tartine, s'il vous plaît.", "Un toast, per favore.", "Uma torrada, por favor.", "Einen Toast, bitte.", "Ένα τοστ, παρακαλώ."]) },
+        O("A coffee, please.", ["Un café, por favor.", "Un café, s'il vous plaît.", "Un caffè, per favore.", "Um café, por favor.", "Einen Kaffee, bitte.", "Έναν καφέ, παρακαλώ."],
+          [["cafe"], ["cafe"], ["caffe", "cafe", "espresso"], ["cafe", "bica"], ["kaffee", "espresso"], ["καφε", "εσπρεσο"]]),
+        O("A milky coffee, please.", ["Un café con leche, por favor.", "Un café crème, s'il vous plaît.", "Un cappuccino, per favore.", "Um galão, por favor.", "Einen Milchkaffee, bitte.", "Έναν καφέ με γάλα, παρακαλώ."],
+          [["con leche", "leche"], ["creme", "au lait"], ["cappuccino", "latte"], ["galao", "com leite"], ["milchkaffee", "milch"], ["με γαλα"]]),
+        O("A tea, please.", ["Un té, por favor.", "Un thé, s'il vous plaît.", "Un tè, per favore.", "Um chá, por favor.", "Einen Tee, bitte.", "Ένα τσάι, παρακαλώ."],
+          [["te"], ["the"], ["te", "the"], ["cha"], ["tee"], ["τσαι"]]),
+        O("A hot chocolate, please.", ["Un chocolate caliente, por favor.", "Un chocolat chaud, s'il vous plaît.", "Una cioccolata calda, per favore.", "Um chocolate quente, por favor.", "Eine heiße Schokolade, bitte.", "Μία ζεστή σοκολάτα, παρακαλώ."],
+          [["chocolate"], ["chocolat"], ["cioccolat*"], ["chocolate"], ["schokolade"], ["σοκολατα"]],
+          ["¡Buena elección! Lo hacemos aquí.", "Bon choix, il est fait maison.", "Ottima scelta, è fatta in casa.", "Boa escolha, é caseiro.", "Gute Wahl, die ist hausgemacht.", "Καλή επιλογή, είναι σπιτική."], "Good choice, it's homemade."),
+        O("An orange juice, please.", ["Un zumo de naranja, por favor.", "Un jus d'orange, s'il vous plaît.", "Una spremuta d'arancia, per favore.", "Um sumo de laranja, por favor.", "Einen Orangensaft, bitte.", "Έναν χυμό πορτοκάλι, παρακαλώ."],
+          [["zumo", "naranja"], ["jus"], ["spremuta", "succo"], ["sumo", "laranja"], ["orangensaft", "saft"], ["χυμο*"]],
+          ["¡Recién exprimido!", "Pressé minute !", "Appena spremuta!", "Acabado de espremer!", "Frisch gepresst!", "Φρεσκοστυμμένος!"], "Freshly squeezed!"),
+        O("A water, please.", ["Un agua, por favor.", "Une bouteille d'eau, s'il vous plaît.", "Un'acqua naturale, per favore.", "Uma água, por favor.", "Ein Wasser, bitte.", "Ένα νερό, παρακαλώ."], WATER) ] },
+      { en: "Anything to eat? We have croissants, toast and cake.", p: T(["¿Algo para comer? Tenemos cruasanes, tostadas y tarta.", "Et avec ceci ? Nous avons des croissants, des tartines et du gâteau.", "Qualcosa da mangiare? Abbiamo cornetti, toast e torte.", "Mais alguma coisa para comer? Temos croissants, torradas e bolo.", "Etwas zu essen? Wir haben Croissants, Toast und Kuchen.", "Κάτι να φάτε; Έχουμε κρουασάν, τοστ και κέικ."]), o: [
+        O("A croissant, please.", ["Un cruasán, por favor.", "Un croissant, s'il vous plaît.", "Un cornetto, per favore.", "Um croissant, por favor.", "Ein Croissant, bitte.", "Ένα κρουασάν, παρακαλώ."],
+          [["cruasan*", "croissant*"], ["croissant*"], ["cornett*", "croissant*"], ["croissant*"], ["croissant*"], ["κρουασαν*"]]),
+        O("Toast, please.", ["Una tostada, por favor.", "Une tartine, s'il vous plaît.", "Un toast, per favore.", "Uma torrada, por favor.", "Einen Toast, bitte.", "Ένα τοστ, παρακαλώ."],
+          [["tostada*"], ["tartine*"], ["toast"], ["torrada*"], ["toast"], ["τοστ"]]),
+        O("A slice of cake, please.", ["Un trozo de tarta, por favor.", "Une part de gâteau, s'il vous plaît.", "Una fetta di torta, per favore.", "Uma fatia de bolo, por favor.", "Ein Stück Kuchen, bitte.", "Ένα κομμάτι κέικ, παρακαλώ."],
+          [["tarta", "pastel"], ["gateau"], ["torta"], ["bolo"], ["kuchen"], ["κεικ", "γλυκο"]],
+          ["¡Es de chocolate, está buenísima!", "C'est un gâteau au chocolat, il est délicieux !", "È al cioccolato, buonissima!", "É de chocolate, está ótimo!", "Schokoladenkuchen, sehr lecker!", "Είναι σοκολάτα, πολύ νόστιμο!"], "It's chocolate, it's delicious!"),
         NO_THANKS ] },
       { en: "For here or to take away?", p: T(["¿Para tomar aquí o para llevar?", "Sur place ou à emporter ?", "Qui o da portare via?", "É para comer aqui ou para levar?", "Zum Hieressen oder zum Mitnehmen?", "Για εδώ ή πακέτο;"]), o: [
-        { en: "For here.", k: K([["aqui"], ["sur place", "place"], ["qui"], ["aqui"], ["hier*"], ["εδω"]]), say: T(["Para tomar aquí.", "Sur place.", "Qui, grazie.", "Para comer aqui.", "Zum Hieressen, bitte.", "Για εδώ."]) },
-        { en: "To take away.", k: K([["llevar"], ["emporter"], ["via", "portare"], ["levar"], ["mitnehmen"], ["πακετο"]]), say: T(["Para llevar.", "À emporter.", "Da portare via.", "Para levar.", "Zum Mitnehmen.", "Πακέτο, παρακαλώ."]) } ] },
+        O("For here.", ["Para tomar aquí.", "Sur place.", "Qui, grazie.", "Para comer aqui.", "Zum Hieressen, bitte.", "Για εδώ."],
+          [["aqui"], ["sur place"], ["qui"], ["aqui"], ["hier*"], ["εδω"]]),
+        O("To take away.", ["Para llevar.", "À emporter.", "Da portare via.", "Para levar.", "Zum Mitnehmen.", "Πακέτο, παρακαλώ."],
+          [["llevar"], ["emporter"], ["via", "portare"], ["levar"], ["mitnehmen"], ["πακετο"]]),
+        O("For here, on the terrace.", ["Aquí, en la terraza.", "Sur place, en terrasse.", "Qui, in terrazza.", "Aqui, na esplanada.", "Hier, auf der Terrasse.", "Εδώ, στη βεράντα."],
+          [["terraza"], ["en terrasse"], ["terrazza"], ["esplanada"], ["terrasse"], ["βεραντα"]],
+          ["Perfecto, hace muy buen día.", "Parfait, il fait beau.", "Perfetto, c'è il sole.", "Perfeito, está um belo dia.", "Gern, das Wetter ist schön.", "Τέλεια, έχει ωραίο καιρό."], "Perfect, it's a lovely day.") ] },
       { en: "That's four euros fifty. Cash or card?", p: T(["Son cuatro euros con cincuenta. ¿Efectivo o tarjeta?", "Ça fait quatre euros cinquante. En espèces ou par carte ?", "Sono quattro euro e cinquanta. Contanti o carta?", "São quatro euros e cinquenta. Dinheiro ou cartão?", "Das macht vier Euro fünfzig. Bar oder mit Karte?", "Τέσσερα πενήντα, παρακαλώ. Μετρητά ή κάρτα;"]), o: [
-        { en: "By card, please.", k: K([["tarjeta"], ["carte"], ["carta"], ["cartao"], ["karte"], ["καρτα"]]), say: T(["Con tarjeta, por favor.", "Par carte, s'il vous plaît.", "Con la carta, per favore.", "Com cartão, por favor.", "Mit Karte, bitte.", "Με κάρτα, παρακαλώ."]) },
-        { en: "In cash.", k: K([["efectivo"], ["especes", "liquide"], ["contanti"], ["dinheiro"], ["bar"], ["μετρητα"]]), say: T(["En efectivo.", "En espèces.", "In contanti.", "Em dinheiro.", "Bar, bitte.", "Μετρητά."]) } ] } ],
+        O("By card, please.", ["Con tarjeta, por favor.", "Par carte, s'il vous plaît.", "Con la carta, per favore.", "Com cartão, por favor.", "Mit Karte, bitte.", "Με κάρτα, παρακαλώ."],
+          [["tarjeta"], ["carte"], ["carta"], ["cartao"], ["karte"], ["καρτα"]]),
+        O("In cash.", ["En efectivo.", "En espèces.", "In contanti.", "Em dinheiro.", "Bar, bitte.", "Μετρητά."],
+          [["efectivo"], ["especes", "liquide"], ["contanti"], ["dinheiro"], ["bar"], ["μετρητα"]]),
+        O("With my phone, please.", ["Con el móvil, por favor.", "Avec mon téléphone, s'il vous plaît.", "Con il telefono, per favore.", "Com o telemóvel, por favor.", "Mit dem Handy, bitte.", "Με το κινητό, παρακαλώ."],
+          [["movil"], ["telephone"], ["telefono", "cellulare"], ["telemovel"], ["handy"], ["κινητο"]]) ] } ],
       end: { en: "Here you go. Have a nice day!", p: T(["Aquí tiene. ¡Que tenga un buen día!", "Voilà. Bonne journée !", "Ecco a lei. Buona giornata!", "Aqui tem. Tenha um bom dia!", "Bitte schön. Einen schönen Tag noch!", "Ορίστε. Καλή σας μέρα!"]) } },
 
     directions: { steps: [
       { en: "Hi! Do you need help?", p: T(["¡Hola! ¿Necesita ayuda?", "Bonjour ! Vous avez besoin d'aide ?", "Salve! Ha bisogno di aiuto?", "Olá! Precisa de ajuda?", "Hallo! Brauchen Sie Hilfe?", "Γεια σας! Χρειάζεστε βοήθεια;"]), any: true, o: [
-        { en: "Yes, where is {place}?", say: T(["Sí, ¿dónde está la Plaza Mayor?", "Oui, où est le Louvre ?", "Sì, dov'è il Colosseo?", "Sim, onde fica a Praça do Comércio?", "Ja, wo ist das Brandenburger Tor?", "Ναι, πού είναι η Ακρόπολη;"]) } ] },
+        O("Yes, where is {place}?", ["Sí, ¿dónde está la Plaza Mayor?", "Oui, où est le Louvre ?", "Sì, dov'è il Colosseo?", "Sim, onde fica a Praça do Comércio?", "Ja, wo ist das Brandenburger Tor?", "Ναι, πού είναι η Ακρόπολη;"],
+          [["plaza mayor"], ["louvre"], ["colosseo"], ["praca do comercio", "comercio"], ["brandenburger tor"], ["ακροπολη"]]),
+        O("Yes, where is the metro?", ["Sí, ¿dónde está el metro?", "Oui, où est le métro ?", "Sì, dov'è la metropolitana?", "Sim, onde fica o metro?", "Ja, wo ist die U-Bahn?", "Ναι, πού είναι το μετρό;"],
+          [["metro"], ["metro"], ["metro*"], ["metro"], ["u bahn", "ubahn"], ["μετρο"]]),
+        O("Yes, I'm looking for a pharmacy.", ["Sí, busco una farmacia.", "Oui, je cherche une pharmacie.", "Sì, cerco una farmacia.", "Sim, procuro uma farmácia.", "Ja, ich suche eine Apotheke.", "Ναι, ψάχνω ένα φαρμακείο."],
+          [["farmacia"], ["pharmacie"], ["farmacia"], ["farmacia"], ["apotheke"], ["φαρμακειο"]]) ] },
       { en: "It's not far. Go straight ahead and then turn left.", p: T(["No está lejos. Siga todo recto y luego gire a la izquierda.", "Ce n'est pas loin. Allez tout droit, puis tournez à gauche.", "Non è lontano. Vada sempre dritto e poi giri a sinistra.", "Não é longe. Siga em frente e depois vire à esquerda.", "Es ist nicht weit. Gehen Sie geradeaus und dann links.", "Δεν είναι μακριά. Πηγαίνετε ευθεία και μετά στρίψτε αριστερά."]), o: [
-        { en: "Straight ahead and then left?", k: K([["izquierda", "recto"], ["gauche", "tout droit"], ["sinistra", "dritto"], ["esquerda", "frente"], ["links", "geradeaus"], ["αριστερα", "ευθεια"]]), say: T(["¿Todo recto y luego a la izquierda?", "Tout droit, puis à gauche ?", "Sempre dritto e poi a sinistra?", "Em frente e depois à esquerda?", "Geradeaus und dann links?", "Ευθεία και μετά αριστερά;"]) },
-        { en: "Can you repeat that, please?", stay: true, k: K([["repetir"], ["repeter"], ["ripetere"], ["repetir"], ["wiederholen"], ["επαναλαβετε"]]), r: T(["Claro.", "Bien sûr.", "Certo.", "Claro.", "Natürlich.", "Βεβαίως."]), ren: "Of course.", say: T(["¿Puede repetir, por favor?", "Vous pouvez répéter, s'il vous plaît ?", "Può ripetere, per favore?", "Pode repetir, por favor?", "Können Sie das wiederholen, bitte?", "Μπορείτε να επαναλάβετε, παρακαλώ;"]) } ] },
-      { en: "Exactly. It's about ten minutes on foot.", p: T(["Exacto. Está a unos diez minutos andando.", "Exactement. C'est à dix minutes à pied environ.", "Esatto. Sono circa dieci minuti a piedi.", "Exatamente. Fica a uns dez minutos a pé.", "Genau. Das sind ungefähr zehn Minuten zu Fuß.", "Ακριβώς. Είναι περίπου δέκα λεπτά με τα πόδια."]), any: true, o: [
-        { en: "Thank you very much!", say: T(["¡Muchas gracias!", "Merci beaucoup !", "Grazie mille!", "Muito obrigado!", "Vielen Dank!", "Ευχαριστώ πολύ!"]) } ] },
-      { en: "You're welcome! Where are you from?", p: T(["¡De nada! ¿De dónde es usted?", "De rien ! Vous venez d'où ?", "Prego! Di dov'è?", "De nada! De onde é?", "Gern geschehen! Woher kommen Sie?", "Τίποτα! Από πού είστε;"]), any: true, o: [FROM_US] } ],
+        O("Straight ahead and then left?", ["¿Todo recto y luego a la izquierda?", "Tout droit, puis à gauche ?", "Sempre dritto e poi a sinistra?", "Em frente e depois à esquerda?", "Geradeaus und dann links?", "Ευθεία και μετά αριστερά;"],
+          [["izquierda", "recto"], ["gauche", "tout droit"], ["sinistra", "dritto"], ["esquerda", "em frente"], ["links", "geradeaus"], ["αριστερα", "ευθεια"]],
+          ["¡Exacto!", "Exactement !", "Esatto!", "Exatamente!", "Genau!", "Ακριβώς!"], "Exactly!"),
+        O("Is it far?", ["¿Está lejos?", "C'est loin ?", "È lontano?", "É longe?", "Ist es weit?", "Είναι μακριά;"],
+          [["lejos"], ["loin"], ["lontano"], ["longe"], ["weit"], ["μακρια"]],
+          ["No, no mucho.", "Non, pas trop.", "No, non molto.", "Não, não muito.", "Nein, nicht sehr.", "Όχι, όχι πολύ."], "No, not very."),
+        O("Can you repeat that, please?", ["¿Puede repetir, por favor?", "Vous pouvez répéter, s'il vous plaît ?", "Può ripetere, per favore?", "Pode repetir, por favor?", "Können Sie das wiederholen, bitte?", "Μπορείτε να επαναλάβετε, παρακαλώ;"],
+          [["repetir"], ["repeter"], ["ripetere"], ["repetir"], ["wiederholen"], ["επαναλαβετε"]],
+          ["Claro.", "Bien sûr.", "Certo.", "Claro.", "Natürlich.", "Βεβαίως."], "Of course.", { stay: true }),
+        O("OK, thank you!", ["¡Vale, gracias!", "D'accord, merci !", "Va bene, grazie!", "Está bem, obrigado!", "Okay, danke!", "Εντάξει, ευχαριστώ!"], THANKS) ] },
+      { en: "It's about ten minutes on foot.", p: T(["Está a unos diez minutos andando.", "C'est à dix minutes à pied environ.", "Sono circa dieci minuti a piedi.", "Fica a uns dez minutos a pé.", "Das sind ungefähr zehn Minuten zu Fuß.", "Είναι περίπου δέκα λεπτά με τα πόδια."]), any: true, o: [
+        O("Thank you very much!", ["¡Muchas gracias!", "Merci beaucoup !", "Grazie mille!", "Muito obrigado!", "Vielen Dank!", "Ευχαριστώ πολύ!"], THANKS,
+          ["¡De nada!", "De rien !", "Prego!", "De nada!", "Gern geschehen!", "Τίποτα!"], "You're welcome!"),
+        O("Can I take a bus?", ["¿Puedo ir en autobús?", "Je peux prendre le bus ?", "Posso prendere l'autobus?", "Posso apanhar o autocarro?", "Kann ich den Bus nehmen?", "Μπορώ να πάρω λεωφορείο;"],
+          [["autobus", "bus"], ["bus"], ["autobus", "bus"], ["autocarro"], ["bus"], ["λεωφορειο"]],
+          ["Sí, pero andando es más bonito.", "Oui, mais à pied c'est plus joli.", "Sì, ma a piedi è più bello.", "Sim, mas a pé é mais bonito.", "Ja, aber zu Fuß ist es schöner.", "Ναι, αλλά με τα πόδια είναι πιο όμορφα."], "Yes, but walking is nicer.") ] },
+      { en: "Where are you from, by the way?", p: T(["¿De dónde es usted, por cierto?", "Vous venez d'où, au fait ?", "Di dov'è, a proposito?", "Já agora, de onde é?", "Woher kommen Sie eigentlich?", "Από πού είστε, αλήθεια;"]), any: true, o: FROM } ],
       end: { en: "How nice! Enjoy the city. Goodbye!", p: T(["¡Qué bien! Disfrute de la ciudad. ¡Adiós!", "Super ! Profitez bien de la ville. Au revoir !", "Che bello! Si goda la città. Arrivederci!", "Que bom! Aproveite a cidade. Adeus!", "Wie schön! Viel Spaß in der Stadt. Auf Wiedersehen!", "Τι ωραία! Καλή διαμονή στην πόλη. Αντίο!"]) } },
 
     hotel: { steps: [
       { en: "Good evening. Do you have a reservation?", p: T(["Buenas tardes. ¿Tiene una reserva?", "Bonsoir. Vous avez une réservation ?", "Buonasera. Ha una prenotazione?", "Boa tarde. Tem reserva?", "Guten Abend. Haben Sie eine Reservierung?", "Καλησπέρα. Έχετε κράτηση;"]), any: true, o: [
-        { en: "Yes, under the name Smith.", say: T(["Sí, a nombre de Smith.", "Oui, au nom de Smith.", "Sì, a nome Smith.", "Sim, em nome de Smith.", "Ja, auf den Namen Smith.", "Ναι, στο όνομα Smith."]) } ] },
+        O("Yes, under the name Smith.", ["Sí, a nombre de Smith.", "Oui, au nom de Smith.", "Sì, a nome Smith.", "Sim, em nome de Smith.", "Ja, auf den Namen Smith.", "Ναι, στο όνομα Smith."],
+          [["nombre"], ["nom"], ["nome"], ["nome"], ["namen"], ["ονομα"]]),
+        O("No, do you have a room for tonight?", ["No, ¿tiene una habitación para esta noche?", "Non, vous avez une chambre pour ce soir ?", "No, avete una camera per stanotte?", "Não, tem um quarto para esta noite?", "Nein, haben Sie ein Zimmer für heute Nacht?", "Όχι, έχετε ένα δωμάτιο για απόψε;"],
+          [["habitacion"], ["chambre"], ["camera"], ["quarto"], ["zimmer"], ["δωματιο"]],
+          ["Sí, nos queda una.", "Oui, il nous en reste une.", "Sì, ne abbiamo ancora una.", "Sim, ainda temos um.", "Ja, wir haben noch eins frei.", "Ναι, μας έχει μείνει ένα."], "Yes, we have one left.") ] },
       { en: "Perfect. Your passport, please.", p: T(["Perfecto. Su pasaporte, por favor.", "Parfait. Votre passeport, s'il vous plaît.", "Perfetto. Il passaporto, per favore.", "Perfeito. O seu passaporte, por favor.", "Perfekt. Ihren Reisepass, bitte.", "Τέλεια. Το διαβατήριό σας, παρακαλώ."]), any: true, o: [
-        { en: "Here you go.", say: T(["Aquí tiene.", "Voilà.", "Ecco.", "Aqui está.", "Bitte schön.", "Ορίστε."]) } ] },
+        O("Here you go.", ["Aquí tiene.", "Voilà.", "Ecco.", "Aqui está.", "Bitte schön.", "Ορίστε."],
+          [["aqui"], ["voila"], ["ecco"], ["aqui"], ["bitte"], ["οριστε"]]),
+        O("One moment, it's in my bag.", ["Un momento, está en mi bolso.", "Un instant, il est dans mon sac.", "Un attimo, è nella borsa.", "Um momento, está na mala.", "Einen Moment, er ist in meiner Tasche.", "Μια στιγμή, είναι στην τσάντα μου."],
+          [["momento"], ["instant", "moment"], ["attimo", "momento"], ["momento"], ["moment"], ["στιγμη"]],
+          ["Sin prisa.", "Prenez votre temps.", "Faccia con calma.", "Esteja à vontade.", "Kein Problem, ganz in Ruhe.", "Κανένα πρόβλημα."], "No rush.") ] },
       { en: "How many nights are you staying?", p: T(["¿Cuántas noches se queda?", "Vous restez combien de nuits ?", "Quante notti si ferma?", "Quantas noites vai ficar?", "Wie viele Nächte bleiben Sie?", "Πόσες νύχτες θα μείνετε;"]), any: true, o: [
-        { en: "Three nights.", say: T(["Tres noches.", "Trois nuits.", "Tre notti.", "Três noites.", "Drei Nächte.", "Τρεις νύχτες."]) } ] },
+        O("One night.", ["Una noche.", "Une nuit.", "Una notte.", "Uma noite.", "Eine Nacht.", "Μία νύχτα."], [["una", "1"], ["une", "1"], ["una", "1"], ["uma", "1"], ["eine", "1"], ["μια", "1"]]),
+        O("Two nights.", ["Dos noches.", "Deux nuits.", "Due notti.", "Duas noites.", "Zwei Nächte.", "Δύο νύχτες."], [["dos", "2"], ["deux", "2"], ["due", "2"], ["duas", "2"], ["zwei", "2"], ["δυο", "2"]]),
+        O("Three nights.", ["Tres noches.", "Trois nuits.", "Tre notti.", "Três noites.", "Drei Nächte.", "Τρεις νύχτες."], [["tres", "3"], ["trois", "3"], ["tre", "3"], ["tres", "3"], ["drei", "3"], ["τρεις", "3"]]),
+        O("A week.", ["Una semana.", "Une semaine.", "Una settimana.", "Uma semana.", "Eine Woche.", "Μία εβδομάδα."], [["semana"], ["semaine"], ["settimana"], ["semana"], ["woche"], ["εβδομαδα"]],
+          ["¡Estupendo, así podrá ver toda la ciudad!", "Super, vous aurez le temps de tout voir !", "Ottimo, così vedrà tutta la città!", "Ótimo, assim pode ver a cidade toda!", "Prima, dann sehen Sie die ganze Stadt!", "Τέλεια, έτσι θα δείτε όλη την πόλη!"], "Great, then you'll see the whole city!") ] },
       { en: "Very good. Your room is 204, on the second floor. Any questions?", p: T(["Muy bien. Su habitación es la doscientos cuatro, en la segunda planta. ¿Alguna pregunta?", "Très bien. Votre chambre est la deux cent quatre, au deuxième étage. Vous avez des questions ?", "Benissimo. La sua camera è la duecentoquattro, al secondo piano. Ha domande?", "Muito bem. O seu quarto é o duzentos e quatro, no segundo andar. Tem alguma pergunta?", "Sehr gut. Ihr Zimmer ist die zweihundertvier, im zweiten Stock. Haben Sie Fragen?", "Πολύ ωραία. Το δωμάτιό σας είναι το διακόσια τέσσερα, στον δεύτερο όροφο. Έχετε κάποια ερώτηση;"]), any: true, o: [
-        { en: "What time is breakfast?", k: K([["desayuno"], ["petit dejeuner", "dejeuner"], ["colazione"], ["pequeno almoco", "almoco"], ["fruhstuck"], ["πρωινο"]]), r: T(["El desayuno es de siete a diez.", "Le petit-déjeuner est servi de sept heures à dix heures.", "La colazione è dalle sette alle dieci.", "O pequeno-almoço é das sete às dez.", "Frühstück gibt es von sieben bis zehn Uhr.", "Το πρωινό είναι από τις επτά έως τις δέκα."]), ren: "Breakfast is from seven to ten.", say: T(["¿A qué hora es el desayuno?", "Le petit-déjeuner est à quelle heure ?", "A che ora è la colazione?", "A que horas é o pequeno-almoço?", "Wann gibt es Frühstück?", "Τι ώρα είναι το πρωινό;"]) },
-        { en: "What's the wifi password?", k: K([["wifi", "wi fi", "contrasena"], ["wifi", "wi fi", "mot de passe"], ["wifi", "wi fi", "password"], ["wifi", "wi fi", "palavra passe"], ["wlan", "wifi", "wi fi", "passwort"], ["wifi", "wi fi", "κωδικος"]]), r: T(["La contraseña está en la tarjeta de su habitación.", "Le mot de passe est sur votre carte de chambre.", "La password è sulla tessera della camera.", "A palavra-passe está no cartão do quarto.", "Das Passwort steht auf Ihrer Zimmerkarte.", "Ο κωδικός είναι στην κάρτα του δωματίου σας."]), ren: "The password is on your room key card.", say: T(["¿Cuál es la contraseña del wifi?", "Quel est le mot de passe du wifi ?", "Qual è la password del wifi?", "Qual é a palavra-passe do wifi?", "Wie ist das WLAN-Passwort?", "Ποιος είναι ο κωδικός του wifi;"]) },
+        O("What time is breakfast?", ["¿A qué hora es el desayuno?", "Le petit-déjeuner est à quelle heure ?", "A che ora è la colazione?", "A que horas é o pequeno-almoço?", "Wann gibt es Frühstück?", "Τι ώρα είναι το πρωινό;"],
+          [["desayuno"], ["petit dejeuner", "dejeuner"], ["colazione"], ["pequeno almoco", "almoco"], ["fruhstuck"], ["πρωινο"]],
+          ["El desayuno es de siete a diez.", "Le petit-déjeuner est servi de sept heures à dix heures.", "La colazione è dalle sette alle dieci.", "O pequeno-almoço é das sete às dez.", "Frühstück gibt es von sieben bis zehn Uhr.", "Το πρωινό είναι από τις επτά έως τις δέκα."], "Breakfast is from seven to ten."),
+        O("What's the wifi password?", ["¿Cuál es la contraseña del wifi?", "Quel est le mot de passe du wifi ?", "Qual è la password del wifi?", "Qual é a palavra-passe do wifi?", "Wie ist das WLAN-Passwort?", "Ποιος είναι ο κωδικός του wifi;"],
+          [["wifi", "wi fi", "contrasena"], ["wifi", "wi fi", "mot de passe"], ["wifi", "wi fi", "password"], ["wifi", "wi fi", "palavra passe"], ["wlan*", "wifi", "wi fi", "passwort"], ["wifi", "wi fi", "κωδικος"]],
+          ["La contraseña está en la tarjeta de su habitación.", "Le mot de passe est sur votre carte de chambre.", "La password è sulla tessera della camera.", "A palavra-passe está no cartão do quarto.", "Das Passwort steht auf Ihrer Zimmerkarte.", "Ο κωδικός είναι στην κάρτα του δωματίου σας."], "The password is on your room key card."),
+        O("Is there parking?", ["¿Hay aparcamiento?", "Il y a un parking ?", "C'è un parcheggio?", "Há estacionamento?", "Gibt es einen Parkplatz?", "Υπάρχει πάρκινγκ;"],
+          [["aparcamiento", "parking"], ["parking"], ["parcheggio"], ["estacionamento"], ["parkplatz", "parken"], ["παρκινγκ"]],
+          ["Sí, justo detrás del hotel.", "Oui, juste derrière l'hôtel.", "Sì, proprio dietro l'hotel.", "Sim, mesmo atrás do hotel.", "Ja, direkt hinter dem Hotel.", "Ναι, ακριβώς πίσω από το ξενοδοχείο."], "Yes, right behind the hotel."),
         NO_THANKS ] } ],
       end: { en: "Enjoy your stay!", p: T(["¡Que disfrute de su estancia!", "Bon séjour !", "Buon soggiorno!", "Boa estadia!", "Einen angenehmen Aufenthalt!", "Καλή διαμονή!"]) } },
 
     market: { steps: [
       { en: "Hello! Fresh fruit today. What would you like?", p: T(["¡Hola! Hoy hay fruta fresca. ¿Qué quiere?", "Bonjour ! Fruits frais aujourd'hui. Qu'est-ce qu'il vous faut ?", "Buongiorno! Frutta fresca oggi. Cosa desidera?", "Olá! Fruta fresca hoje. O que deseja?", "Hallo! Heute frisches Obst. Was hätten Sie gern?", "Γεια σας! Φρέσκα φρούτα σήμερα. Τι θα θέλατε;"]), any: true, o: [
-        { en: "A kilo of oranges, please.", k: K([["naranja*"], ["orange*"], ["aranc*"], ["laranja*"], ["orange*"], ["πορτοκαλ*"]]), say: T(["Un kilo de naranjas, por favor.", "Un kilo d'oranges, s'il vous plaît.", "Un chilo di arance, per favore.", "Um quilo de laranjas, por favor.", "Ein Kilo Orangen, bitte.", "Ένα κιλό πορτοκάλια, παρακαλώ."]) },
-        { en: "A kilo of apples, please.", k: K([["manzana*"], ["pomme*"], ["mela", "mele"], ["maca", "macas"], ["apfel"], ["μηλ*"]]), say: T(["Un kilo de manzanas, por favor.", "Un kilo de pommes, s'il vous plaît.", "Un chilo di mele, per favore.", "Um quilo de maçãs, por favor.", "Ein Kilo Äpfel, bitte.", "Ένα κιλό μήλα, παρακαλώ."]) } ] },
+        O("A kilo of oranges, please.", ["Un kilo de naranjas, por favor.", "Un kilo d'oranges, s'il vous plaît.", "Un chilo di arance, per favore.", "Um quilo de laranjas, por favor.", "Ein Kilo Orangen, bitte.", "Ένα κιλό πορτοκάλια, παρακαλώ."],
+          [["naranja*"], ["orange*"], ["aranc*"], ["laranja*"], ["orange*"], ["πορτοκαλ*"]]),
+        O("A kilo of apples, please.", ["Un kilo de manzanas, por favor.", "Un kilo de pommes, s'il vous plaît.", "Un chilo di mele, per favore.", "Um quilo de maçãs, por favor.", "Ein Kilo Äpfel, bitte.", "Ένα κιλό μήλα, παρακαλώ."],
+          [["manzana*"], ["pomme*"], ["mela", "mele"], ["maca", "macas"], ["apfel"], ["μηλ*"]]),
+        O("Half a kilo of strawberries, please.", ["Medio kilo de fresas, por favor.", "Un demi-kilo de fraises, s'il vous plaît.", "Mezzo chilo di fragole, per favore.", "Meio quilo de morangos, por favor.", "Ein halbes Kilo Erdbeeren, bitte.", "Μισό κιλό φράουλες, παρακαλώ."],
+          [["fresa*"], ["fraise*"], ["fragol*"], ["morango*"], ["erdbeer*"], ["φραουλ*"]]),
+        O("Some bananas, please.", ["Unos plátanos, por favor.", "Des bananes, s'il vous plaît.", "Delle banane, per favore.", "Umas bananas, por favor.", "Ein paar Bananen, bitte.", "Μερικές μπανάνες, παρακαλώ."],
+          [["platano*"], ["banane*"], ["banan*"], ["banana*"], ["banane*"], ["μπαναν*"]]),
+        O("What do you recommend?", ["¿Qué me recomienda?", "Qu'est-ce que vous me conseillez ?", "Cosa mi consiglia?", "O que me recomenda?", "Was empfehlen Sie?", "Τι μου προτείνετε;"],
+          [["recomienda"], ["conseillez", "recommandez"], ["consiglia"], ["recomenda"], ["empfehlen"], ["προτεινετε"]],
+          ["Hoy los melocotones están buenísimos. Le pongo unos.", "Aujourd'hui, les pêches sont délicieuses. Je vous en mets quelques-unes.", "Oggi le pesche sono buonissime. Gliene do qualcuna.", "Hoje os pêssegos estão ótimos. Ponho-lhe alguns.", "Heute sind die Pfirsiche sehr gut. Ich gebe Ihnen ein paar.", "Σήμερα τα ροδάκινα είναι υπέροχα. Σας βάζω μερικά."], "The peaches are great today. I'll give you some.") ] },
       { en: "Here you go. Anything else?", p: T(["Aquí tiene. ¿Algo más?", "Voilà. Et avec ça ?", "Ecco qua. Altro?", "Aqui está. Mais alguma coisa?", "Bitte schön. Sonst noch etwas?", "Ορίστε. Κάτι άλλο;"]), any: true, o: [
-        { en: "No, thanks. How much is it?", k: K([["cuanto"], ["combien"], ["quanto"], ["quanto"], ["kostet", "wie viel", "wieviel"], ["ποσο"]]), say: T(["No, gracias. ¿Cuánto es?", "Non, merci. C'est combien ?", "No, grazie. Quant'è?", "Não, obrigado. Quanto é?", "Nein, danke. Was kostet das?", "Όχι, ευχαριστώ. Πόσο κάνει;"]) },
+        O("No, thanks. How much is it?", ["No, gracias. ¿Cuánto es?", "Non, merci. C'est combien ?", "No, grazie. Quant'è?", "Não, obrigado. Quanto é?", "Nein, danke. Was kostet das?", "Όχι, ευχαριστώ. Πόσο κάνει;"],
+          [["cuanto"], ["combien"], ["quanto", "quant e"], ["quanto"], ["kostet", "wie viel", "wieviel"], ["ποσο"]]),
+        O("And some tomatoes, please.", ["Y unos tomates, por favor.", "Et des tomates, s'il vous plaît.", "E dei pomodori, per favore.", "E uns tomates, por favor.", "Und ein paar Tomaten, bitte.", "Και μερικές ντομάτες, παρακαλώ."],
+          [["tomate*"], ["tomate*"], ["pomodor*"], ["tomate*"], ["tomate*"], ["ντοματ*"]],
+          ["¡Claro! Son los mejores del mercado.", "Bien sûr ! Ce sont les meilleures du marché.", "Certo! Sono i migliori del mercato.", "Claro! São os melhores do mercado.", "Gern! Das sind die besten auf dem Markt.", "Βεβαίως! Είναι οι καλύτερες της αγοράς."], "Of course! They're the best in the market."),
         NO_THANKS ] },
       { en: "That's three euros.", p: T(["Son tres euros.", "Ça fait trois euros.", "Sono tre euro.", "São três euros.", "Das macht drei Euro.", "Τρία ευρώ."]), any: true, o: [
-        { en: "Here you are. Thank you!", say: T(["Aquí tiene. ¡Gracias!", "Voilà. Merci !", "Ecco. Grazie!", "Aqui tem. Obrigado!", "Hier, bitte. Danke!", "Ορίστε. Ευχαριστώ!"]) } ] } ],
+        O("Here you are. Thank you!", ["Aquí tiene. ¡Gracias!", "Voilà. Merci !", "Ecco. Grazie!", "Aqui tem. Obrigado!", "Hier, bitte. Danke!", "Ορίστε. Ευχαριστώ!"], THANKS),
+        O("Can I pay by card?", ["¿Puedo pagar con tarjeta?", "Je peux payer par carte ?", "Posso pagare con la carta?", "Posso pagar com cartão?", "Kann ich mit Karte zahlen?", "Μπορώ να πληρώσω με κάρτα;"],
+          [["tarjeta"], ["carte"], ["carta"], ["cartao"], ["karte"], ["καρτα"]],
+          ["Sí, claro.", "Oui, bien sûr.", "Sì, certo.", "Sim, claro.", "Ja, natürlich.", "Ναι, βεβαίως."], "Yes, of course."),
+        O("I only have a twenty.", ["Solo tengo un billete de veinte.", "Je n'ai qu'un billet de vingt.", "Ho solo una banconota da venti.", "Só tenho uma nota de vinte.", "Ich habe nur einen Zwanziger.", "Έχω μόνο ένα εικοσάρικο."],
+          [["veinte", "20"], ["vingt", "20"], ["venti", "20"], ["vinte", "20"], ["zwanzig*", "20"], ["εικοσαρικο", "εικοσι", "20"]],
+          ["No pasa nada, tengo cambio.", "Pas de souci, j'ai la monnaie.", "Nessun problema, ho il resto.", "Não faz mal, tenho troco.", "Kein Problem, ich habe Wechselgeld.", "Κανένα πρόβλημα, έχω ρέστα."], "No problem, I have change.") ] } ],
       end: { en: "Thank you! See you soon.", p: T(["¡Gracias a usted! Hasta pronto.", "Merci à vous ! À bientôt.", "Grazie a lei! A presto.", "Obrigado eu! Até breve.", "Danke Ihnen! Bis bald.", "Εγώ ευχαριστώ! Τα λέμε."]) } },
 
     train: { steps: [
       { en: "Hello. Where are you traveling to?", p: T(["Hola. ¿Adónde viaja?", "Bonjour. Vous allez où ?", "Buongiorno. Dove deve andare?", "Bom dia. Para onde vai?", "Hallo. Wohin möchten Sie fahren?", "Γεια σας. Πού ταξιδεύετε;"]), any: true, o: [
-        { en: "To {dest}, please.", say: T(["A Barcelona, por favor.", "À Lyon, s'il vous plaît.", "A Firenze, per favore.", "Para o Porto, por favor.", "Nach Hamburg, bitte.", "Στη Θεσσαλονίκη, παρακαλώ."]) } ] },
+        O("To {dest}, please.", ["A Barcelona, por favor.", "À Lyon, s'il vous plaît.", "A Firenze, per favore.", "Para o Porto, por favor.", "Nach Hamburg, bitte.", "Στη Θεσσαλονίκη, παρακαλώ."],
+          [["barcelona"], ["lyon"], ["firenze"], ["porto"], ["hamburg"], ["θεσσαλονικη"]]),
+        O("To {dest2}, please.", ["A Sevilla, por favor.", "À Marseille, s'il vous plaît.", "A Venezia, per favore.", "Para Coimbra, por favor.", "Nach München, bitte.", "Στην Πάτρα, παρακαλώ."],
+          [["sevilla"], ["marseille"], ["venezia"], ["coimbra"], ["munchen"], ["πατρα"]]),
+        O("To the airport, please.", ["Al aeropuerto, por favor.", "À l'aéroport, s'il vous plaît.", "All'aeroporto, per favore.", "Para o aeroporto, por favor.", "Zum Flughafen, bitte.", "Στο αεροδρόμιο, παρακαλώ."],
+          [["aeropuerto"], ["aeroport"], ["aeroporto"], ["aeroporto"], ["flughafen"], ["αεροδρομιο"]]) ] },
       { en: "One way or return?", p: T(["¿Solo ida o ida y vuelta?", "Un aller simple ou un aller-retour ?", "Solo andata o andata e ritorno?", "Só ida ou ida e volta?", "Einfach oder hin und zurück?", "Απλό ή με επιστροφή;"]), o: [
-        { en: "Return, please.", k: K([["vuelta"], ["retour"], ["ritorno"], ["volta"], ["zuruck"], ["επιστροφη"]]), say: T(["Ida y vuelta, por favor.", "Un aller-retour, s'il vous plaît.", "Andata e ritorno, per favore.", "Ida e volta, por favor.", "Hin und zurück, bitte.", "Με επιστροφή, παρακαλώ."]) },
-        { en: "One way.", k: K([["ida"], ["simple"], ["andata"], ["ida"], ["einfach"], ["απλο"]]), say: T(["Solo ida.", "Un aller simple.", "Solo andata.", "Só ida.", "Einfach, bitte.", "Απλό, παρακαλώ."]) } ] },
+        O("Return, please.", ["Ida y vuelta, por favor.", "Un aller-retour, s'il vous plaît.", "Andata e ritorno, per favore.", "Ida e volta, por favor.", "Hin und zurück, bitte.", "Με επιστροφή, παρακαλώ."],
+          [["ida y vuelta", "vuelta"], ["aller retour", "retour"], ["andata e ritorno", "ritorno"], ["ida e volta", "volta"], ["hin und zuruck", "zuruck"], ["επιστροφη"]]),
+        O("One way.", ["Solo ida.", "Un aller simple.", "Solo andata.", "Só ida.", "Einfach, bitte.", "Απλό, παρακαλώ."],
+          [["ida"], ["simple"], ["andata"], ["ida"], ["einfach"], ["απλο"]]) ] },
       { en: "There's a train at a quarter past ten. Is that OK?", p: T(["Hay un tren a las diez y cuarto. ¿Le va bien?", "Il y a un train à dix heures quinze. Ça vous va ?", "C'è un treno alle dieci e un quarto. Va bene?", "Há um comboio às dez e um quarto. Pode ser?", "Es gibt einen Zug um Viertel nach zehn. Passt das?", "Υπάρχει τρένο στις δέκα και τέταρτο. Σας βολεύει;"]), any: true, o: [
-        { en: "Yes, perfect.", k: YES, say: T(["Sí, perfecto.", "Oui, parfait.", "Sì, va bene.", "Sim, pode ser.", "Ja, das passt.", "Ναι, εντάξει."]) } ] },
+        O("Yes, perfect.", ["Sí, perfecto.", "Oui, parfait.", "Sì, va bene.", "Sim, pode ser.", "Ja, das passt.", "Ναι, εντάξει."], YES),
+        O("Is there an earlier one?", ["¿Hay alguno antes?", "Il y en a un plus tôt ?", "Ce n'è uno prima?", "Há algum mais cedo?", "Gibt es einen früheren?", "Υπάρχει κάποιο νωρίτερα;"],
+          [["antes"], ["plus tot", "tot"], ["prima"], ["cedo"], ["fruher*"], ["νωριτερα"]],
+          ["Sí, a las nueve menos cuarto, pero está casi lleno.", "Oui, à huit heures quarante-cinq, mais il est presque complet.", "Sì, alle nove meno un quarto, ma è quasi pieno.", "Sim, às nove menos um quarto, mas está quase cheio.", "Ja, um Viertel vor neun, aber der ist fast voll.", "Ναι, στις εννιά παρά τέταρτο, αλλά είναι σχεδόν γεμάτο."], "Yes, at a quarter to nine, but it's almost full."),
+        O("How long is the trip?", ["¿Cuánto dura el viaje?", "Le trajet dure combien de temps ?", "Quanto dura il viaggio?", "Quanto tempo demora a viagem?", "Wie lange dauert die Fahrt?", "Πόσο διαρκεί το ταξίδι;"],
+          [["dura"], ["dure", "trajet"], ["dura"], ["demora"], ["dauert"], ["διαρκει"]],
+          ["Unas tres horas.", "Environ trois heures.", "Circa tre ore.", "Cerca de três horas.", "Ungefähr drei Stunden.", "Περίπου τρεις ώρες."], "About three hours.") ] },
       { en: "Window or aisle seat?", p: T(["¿Asiento de ventanilla o de pasillo?", "Place côté fenêtre ou côté couloir ?", "Posto finestrino o corridoio?", "Lugar à janela ou no corredor?", "Fensterplatz oder Gangplatz?", "Θέση στο παράθυρο ή στον διάδρομο;"]), o: [
-        { en: "Window, please.", k: K([["ventanilla", "ventana"], ["fenetre"], ["finestrino"], ["janela"], ["fenster*"], ["παραθυρο"]]), say: T(["Ventanilla, por favor.", "Côté fenêtre, s'il vous plaît.", "Finestrino, per favore.", "À janela, por favor.", "Einen Fensterplatz, bitte.", "Στο παράθυρο, παρακαλώ."]) },
-        { en: "Aisle, please.", k: K([["pasillo"], ["couloir"], ["corridoio"], ["corredor"], ["gang*"], ["διαδρομο"]]), say: T(["Pasillo, por favor.", "Côté couloir, s'il vous plaît.", "Corridoio, per favore.", "No corredor, por favor.", "Einen Gangplatz, bitte.", "Στον διάδρομο, παρακαλώ."]) } ] } ],
+        O("Window, please.", ["Ventanilla, por favor.", "Côté fenêtre, s'il vous plaît.", "Finestrino, per favore.", "À janela, por favor.", "Einen Fensterplatz, bitte.", "Στο παράθυρο, παρακαλώ."],
+          [["ventanilla", "ventana"], ["fenetre"], ["finestrino"], ["janela"], ["fenster*"], ["παραθυρο"]]),
+        O("Aisle, please.", ["Pasillo, por favor.", "Côté couloir, s'il vous plaît.", "Corridoio, per favore.", "No corredor, por favor.", "Einen Gangplatz, bitte.", "Στον διάδρομο, παρακαλώ."],
+          [["pasillo"], ["couloir"], ["corridoio"], ["corredor"], ["gang*"], ["διαδρομο"]]),
+        O("I don't mind.", ["Me da igual.", "Peu importe.", "Non importa.", "Tanto faz.", "Egal.", "Δεν με πειράζει."],
+          [["igual"], ["importe"], ["importa", "uguale"], ["tanto faz"], ["egal"], ["πειραζει"]]) ] } ],
       end: { en: "Here is your ticket. Platform four. Have a good trip!", p: T(["Aquí tiene su billete. Andén cuatro. ¡Buen viaje!", "Voici votre billet. Voie quatre. Bon voyage !", "Ecco il biglietto. Binario quattro. Buon viaggio!", "Aqui tem o seu bilhete. Linha quatro. Boa viagem!", "Hier ist Ihre Fahrkarte. Gleis vier. Gute Reise!", "Ορίστε το εισιτήριό σας. Αποβάθρα τέσσερα. Καλό ταξίδι!"]) } },
 
     restaurant: { steps: [
       { en: "Good evening! A table for how many?", p: T(["¡Buenas noches! ¿Mesa para cuántos?", "Bonsoir ! Une table pour combien de personnes ?", "Buonasera! Un tavolo per quanti?", "Boa noite! Mesa para quantas pessoas?", "Guten Abend! Ein Tisch für wie viele Personen?", "Καλησπέρα! Τραπέζι για πόσα άτομα;"]), any: true, o: [
-        { en: "For two, please.", say: T(["Para dos, por favor.", "Pour deux, s'il vous plaît.", "Per due, per favore.", "Para dois, por favor.", "Für zwei, bitte.", "Για δύο, παρακαλώ."]) } ] },
+        O("For two, please.", ["Para dos, por favor.", "Pour deux, s'il vous plaît.", "Per due, per favore.", "Para dois, por favor.", "Für zwei, bitte.", "Για δύο, παρακαλώ."], [["dos", "2"], ["deux", "2"], ["due", "2"], ["dois", "2"], ["zwei", "2"], ["δυο", "2"]]),
+        O("Just for one.", ["Para una persona.", "Pour une personne.", "Per una persona.", "Para uma pessoa.", "Für eine Person.", "Για ένα άτομο."], [["una", "uno", "1"], ["une", "un", "1"], ["una", "uno", "1"], ["uma", "um", "1"], ["eine", "1"], ["ενα", "1"]]),
+        O("For four.", ["Para cuatro.", "Pour quatre.", "Per quattro.", "Para quatro.", "Für vier.", "Για τέσσερα άτομα."], [["cuatro", "4"], ["quatre", "4"], ["quattro", "4"], ["quatro", "4"], ["vier", "4"], ["τεσσερα", "4"]],
+          ["Muy bien, tengo una mesa grande al fondo.", "Très bien, j'ai une grande table au fond.", "Benissimo, ho un tavolo grande in fondo.", "Muito bem, tenho uma mesa grande ao fundo.", "Sehr gut, ich habe einen großen Tisch hinten.", "Πολύ ωραία, έχω ένα μεγάλο τραπέζι στο βάθος."], "Very good, I have a big table at the back.") ] },
       { en: "Today I recommend the {dish}. What will you have?", p: T(["Hoy le recomiendo la paella. ¿Qué va a tomar?", "Aujourd'hui, je vous conseille le bœuf bourguignon. Qu'est-ce que vous prenez ?", "Oggi le consiglio la carbonara. Cosa prende?", "Hoje recomendo o bacalhau à Brás. O que vai querer?", "Heute empfehle ich das Schnitzel. Was möchten Sie?", "Σήμερα σας προτείνω τον μουσακά. Τι θα πάρετε;"]), any: true, o: [
-        { en: "The {dish}, please.", k: K([["paella"], ["bourguignon"], ["carbonara"], ["bacalhau"], ["schnitzel"], ["μουσακα*"]]), say: T(["La paella, por favor.", "Le bœuf bourguignon, s'il vous plaît.", "La carbonara, per favore.", "O bacalhau à Brás, por favor.", "Das Schnitzel, bitte.", "Τον μουσακά, παρακαλώ."]) } ] },
+        O("The {dish}, please.", ["La paella, por favor.", "Le bœuf bourguignon, s'il vous plaît.", "La carbonara, per favore.", "O bacalhau à Brás, por favor.", "Das Schnitzel, bitte.", "Τον μουσακά, παρακαλώ."],
+          [["paella"], ["bourguignon"], ["carbonara"], ["bacalhau"], ["schnitzel"], ["μουσακα*"]],
+          ["¡Excelente elección!", "Excellent choix !", "Ottima scelta!", "Excelente escolha!", "Ausgezeichnete Wahl!", "Εξαιρετική επιλογή!"], "Excellent choice!"),
+        O("The fish, please.", ["El pescado, por favor.", "Le poisson, s'il vous plaît.", "Il pesce, per favore.", "O peixe, por favor.", "Den Fisch, bitte.", "Το ψάρι, παρακαλώ."],
+          [["pescado"], ["poisson"], ["pesce"], ["peixe"], ["fisch"], ["ψαρι"]],
+          ["El pescado de hoy es muy fresco.", "Le poisson du jour est très frais.", "Il pesce di oggi è freschissimo.", "O peixe de hoje está muito fresco.", "Der Fisch ist heute ganz frisch.", "Το ψάρι σήμερα είναι πολύ φρέσκο."], "Today's fish is very fresh."),
+        O("What do you have for vegetarians?", ["¿Qué tienen para vegetarianos?", "Qu'est-ce que vous avez de végétarien ?", "Cosa avete di vegetariano?", "O que têm para vegetarianos?", "Was haben Sie Vegetarisches?", "Τι έχετε για χορτοφάγους;"],
+          [["vegetarian*"], ["vegetarien*"], ["vegetarian*"], ["vegetarian*"], ["vegetarisch*"], ["χορτοφαγ*"]],
+          ["Tenemos una ensalada muy rica y verduras a la plancha.", "Nous avons une très bonne salade et des légumes grillés.", "Abbiamo un'ottima insalata e verdure grigliate.", "Temos uma salada muito boa e legumes grelhados.", "Wir haben einen sehr guten Salat und gegrilltes Gemüse.", "Έχουμε μια πολύ ωραία σαλάτα και ψητά λαχανικά."], "We have a very good salad and grilled vegetables.") ] },
       { en: "And to drink?", p: T(["¿Y para beber?", "Et comme boisson ?", "E da bere?", "E para beber?", "Und zu trinken?", "Και για να πιείτε;"]), any: true, o: [
-        { en: "A glass of red wine.", say: T(["Una copa de vino tinto.", "Un verre de vin rouge.", "Un bicchiere di vino rosso.", "Um copo de vinho tinto.", "Ein Glas Rotwein.", "Ένα ποτήρι κόκκινο κρασί."]) },
-        { en: "Water, please.", say: T(["Agua, por favor.", "De l'eau, s'il vous plaît.", "Acqua, per favore.", "Água, por favor.", "Wasser, bitte.", "Νερό, παρακαλώ."]) } ] },
+        O("A glass of red wine.", ["Una copa de vino tinto.", "Un verre de vin rouge.", "Un bicchiere di vino rosso.", "Um copo de vinho tinto.", "Ein Glas Rotwein.", "Ένα ποτήρι κόκκινο κρασί."],
+          [["tinto", "vino"], ["rouge", "vin"], ["rosso", "vino"], ["tinto", "vinho"], ["rotwein", "wein"], ["κοκκινο"]]),
+        O("A glass of white wine.", ["Una copa de vino blanco.", "Un verre de vin blanc.", "Un bicchiere di vino bianco.", "Um copo de vinho branco.", "Ein Glas Weißwein.", "Ένα ποτήρι λευκό κρασί."],
+          [["blanco"], ["blanc"], ["bianco"], ["branco"], ["weißwein", "weiß"], ["λευκο", "ασπρο"]]),
+        O("A beer, please.", ["Una cerveza, por favor.", "Une bière, s'il vous plaît.", "Una birra, per favore.", "Uma imperial, por favor.", "Ein Bier, bitte.", "Μία μπίρα, παρακαλώ."],
+          [["cerveza", "cana"], ["biere"], ["birra"], ["imperial", "cerveja"], ["bier"], ["μπιρα"]]),
+        O("Water, please.", ["Agua, por favor.", "De l'eau, s'il vous plaît.", "Acqua, per favore.", "Água, por favor.", "Wasser, bitte.", "Νερό, παρακαλώ."], WATER) ] },
       { en: "Did you enjoy your meal?", p: T(["¿Le ha gustado la comida?", "Ça vous a plu ?", "Le è piaciuto?", "Gostou da comida?", "Hat es Ihnen geschmeckt?", "Σας άρεσε το φαγητό;"]), any: true, o: [
-        { en: "Yes, it was delicious. The bill, please.", say: T(["Sí, estaba buenísima. La cuenta, por favor.", "Oui, c'était délicieux. L'addition, s'il vous plaît.", "Sì, era buonissimo. Il conto, per favore.", "Sim, estava delicioso. A conta, por favor.", "Ja, es war sehr lecker. Die Rechnung, bitte.", "Ναι, ήταν πεντανόστιμο. Τον λογαριασμό, παρακαλώ."]) } ] } ],
-      end: { en: "Of course, here is the bill. Thank you and good night!", p: T(["Claro, aquí tiene la cuenta. ¡Gracias y buenas noches!", "Bien sûr, voici l'addition. Merci et bonne soirée !", "Certo, ecco il conto. Grazie e buonanotte!", "Claro, aqui está a conta. Obrigado e boa noite!", "Natürlich, hier ist die Rechnung. Danke und einen schönen Abend!", "Βεβαίως, ορίστε ο λογαριασμός. Ευχαριστούμε και καληνύχτα!"]) } },
+        O("Yes, it was delicious. The bill, please.", ["Sí, estaba buenísima. La cuenta, por favor.", "Oui, c'était délicieux. L'addition, s'il vous plaît.", "Sì, era buonissimo. Il conto, per favore.", "Sim, estava delicioso. A conta, por favor.", "Ja, es war sehr lecker. Die Rechnung, bitte.", "Ναι, ήταν πεντανόστιμο. Τον λογαριασμό, παρακαλώ."],
+          [["cuenta"], ["addition"], ["conto"], ["conta"], ["rechnung"], ["λογαριασμο"]]),
+        O("Yes, compliments to the chef!", ["¡Sí, felicidades al cocinero!", "Oui, mes compliments au chef !", "Sì, complimenti allo chef!", "Sim, os meus parabéns ao chef!", "Ja, ein Kompliment an den Koch!", "Ναι, συγχαρητήρια στον σεφ!"],
+          [["felicidades", "cocinero"], ["compliments", "chef"], ["complimenti", "chef"], ["parabens", "chef"], ["kompliment", "koch"], ["συγχαρητηρια", "σεφ"]],
+          ["¡Muchas gracias, se lo diré!", "Merci beaucoup, je lui dirai !", "Grazie mille, glielo dirò!", "Muito obrigado, vou dizer-lhe!", "Vielen Dank, ich sage es ihm!", "Ευχαριστούμε πολύ, θα του το πω!"], "Thank you so much, I'll tell them!") ] } ],
+      end: { en: "Here is the bill. Thank you and good night!", p: T(["Aquí tiene la cuenta. ¡Gracias y buenas noches!", "Voici l'addition. Merci et bonne soirée !", "Ecco il conto. Grazie e buonanotte!", "Aqui está a conta. Obrigado e boa noite!", "Hier ist die Rechnung. Danke und einen schönen Abend!", "Ορίστε ο λογαριασμός. Ευχαριστούμε και καληνύχτα!"]) } },
 
     chat: { steps: [
       { en: "Hello! Nice day, isn't it?", p: T(["¡Hola! Hace un día precioso, ¿verdad?", "Bonjour ! Il fait beau aujourd'hui, non ?", "Ciao! Che bella giornata, vero?", "Olá! Está um dia lindo, não está?", "Hallo! Schönes Wetter heute, oder?", "Γεια σας! Ωραία μέρα σήμερα, ε;"]), any: true, o: [
-        { en: "Yes, it's lovely!", say: T(["¡Sí, hace muy buen día!", "Oui, il fait très beau !", "Sì, bellissima!", "Sim, está lindo!", "Ja, sehr schön!", "Ναι, πολύ ωραία!"]) } ] },
-      { en: "Are you a tourist? Where are you from?", p: T(["¿Es usted turista? ¿De dónde es?", "Vous êtes touriste ? Vous venez d'où ?", "È un turista? Di dov'è?", "É turista? De onde é?", "Sind Sie Tourist? Woher kommen Sie?", "Είστε τουρίστας; Από πού είστε;"]), any: true, o: [FROM_US] },
+        O("Yes, it's lovely!", ["¡Sí, hace muy buen día!", "Oui, il fait très beau !", "Sì, bellissima!", "Sim, está lindo!", "Ja, sehr schön!", "Ναι, πολύ ωραία!"], YES),
+        O("Yes, but it's a bit hot!", ["¡Sí, pero hace un poco de calor!", "Oui, mais il fait un peu chaud !", "Sì, ma fa un po' caldo!", "Sim, mas está um pouco de calor!", "Ja, aber es ist ein bisschen heiß!", "Ναι, αλλά κάνει λίγη ζέστη!"],
+          [["calor"], ["chaud"], ["caldo"], ["calor"], ["heiß"], ["ζεστη"]],
+          ["¡Es verdad!", "C'est vrai !", "È vero!", "É verdade!", "Das stimmt!", "Έχετε δίκιο!"], "That's true!") ] },
+      { en: "Are you a tourist? Where are you from?", p: T(["¿Es usted turista? ¿De dónde es?", "Vous êtes touriste ? Vous venez d'où ?", "È un turista? Di dov'è?", "É turista? De onde é?", "Sind Sie Tourist? Woher kommen Sie?", "Είστε τουρίστας; Από πού είστε;"]), any: true, o: FROM },
       { en: "How long are you staying in {city}?", p: T(["¿Cuánto tiempo se queda en Madrid?", "Vous restez combien de temps à Paris ?", "Quanto tempo resta a Roma?", "Quanto tempo vai ficar em Lisboa?", "Wie lange bleiben Sie in Berlin?", "Πόσο καιρό θα μείνετε στην Αθήνα;"]), any: true, o: [
-        { en: "One week.", say: T(["Una semana.", "Une semaine.", "Una settimana.", "Uma semana.", "Eine Woche.", "Μία εβδομάδα."]) } ] },
+        O("One week.", ["Una semana.", "Une semaine.", "Una settimana.", "Uma semana.", "Eine Woche.", "Μία εβδομάδα."], [["semana"], ["semaine"], ["settimana"], ["semana"], ["woche"], ["εβδομαδα"]]),
+        O("Just a few days.", ["Solo unos días.", "Seulement quelques jours.", "Solo qualche giorno.", "Só uns dias.", "Nur ein paar Tage.", "Μόνο λίγες μέρες."], [["dias"], ["jours"], ["giorn*"], ["dias"], ["tage"], ["μερες"]],
+          ["¡Qué pena, es poco tiempo!", "Dommage, c'est court !", "Peccato, è poco!", "Que pena, é pouco tempo!", "Schade, das ist kurz!", "Κρίμα, είναι λίγο!"], "What a shame, that's short!"),
+        O("Two weeks.", ["Dos semanas.", "Deux semaines.", "Due settimane.", "Duas semanas.", "Zwei Wochen.", "Δύο εβδομάδες."], [["dos semanas", "semanas"], ["deux semaines", "semaines"], ["due settimane", "settimane"], ["duas semanas", "semanas"], ["zwei wochen", "wochen"], ["δυο εβδομαδες", "εβδομαδες"]],
+          ["¡Qué suerte!", "Quelle chance !", "Che fortuna!", "Que sorte!", "Was für ein Glück!", "Τι τύχη!"], "Lucky you!") ] },
       { en: "You have to see {sight}. Do you like museums?", p: T(["Tiene que ver el Museo del Prado. ¿Le gustan los museos?", "Il faut voir le musée d'Orsay. Vous aimez les musées ?", "Deve vedere i Musei Vaticani. Le piacciono i musei?", "Tem de ver o Mosteiro dos Jerónimos. Gosta de museus?", "Sie müssen die Museumsinsel sehen. Mögen Sie Museen?", "Πρέπει να δείτε το Μουσείο της Ακρόπολης. Σας αρέσουν τα μουσεία;"]), any: true, o: [
-        { en: "Yes, I love them.", k: YES, say: T(["Sí, me encantan.", "Oui, j'adore.", "Sì, mi piacciono molto.", "Sim, gosto muito.", "Ja, sehr gern.", "Ναι, μου αρέσουν πολύ."]) },
-        { en: "Not really, I prefer walking around.", k: NOK, say: T(["No mucho, prefiero pasear.", "Pas trop, je préfère me promener.", "Non molto, preferisco passeggiare.", "Nem por isso, prefiro passear.", "Nicht so sehr, ich gehe lieber spazieren.", "Όχι πολύ, προτιμώ να περπατάω."]) } ] } ],
+        O("Yes, I love them.", ["Sí, me encantan.", "Oui, j'adore.", "Sì, mi piacciono molto.", "Sim, gosto muito.", "Ja, sehr gern.", "Ναι, μου αρέσουν πολύ."], YES),
+        O("Not really, I prefer walking around.", ["No mucho, prefiero pasear.", "Pas trop, je préfère me promener.", "Non molto, preferisco passeggiare.", "Nem por isso, prefiro passear.", "Nicht so sehr, ich gehe lieber spazieren.", "Όχι πολύ, προτιμώ να περπατάω."],
+          [["pasear"], ["promener"], ["passeggiare"], ["passear"], ["spazieren"], ["περπαταω"]]),
+        O("I prefer food and markets.", ["Prefiero la comida y los mercados.", "Je préfère la cuisine et les marchés.", "Preferisco il cibo e i mercati.", "Prefiro a comida e os mercados.", "Ich mag lieber Essen und Märkte.", "Προτιμώ το φαγητό και τις αγορές."],
+          [["comida", "mercado*"], ["cuisine", "marche*"], ["cibo", "mercat*"], ["comida", "mercado*"], ["essen", "markt*"], ["φαγητο", "αγορ*"]],
+          ["¡Entonces vaya al Mercado de San Miguel!", "Alors allez au marché des Enfants Rouges !", "Allora vada al mercato di Campo de' Fiori!", "Então vá ao Mercado da Ribeira!", "Dann gehen Sie in die Markthalle Neun!", "Τότε πηγαίνετε στη Βαρβάκειο Αγορά!"], "Then go to {market}!") ] } ],
       end: { en: "Great! It was a pleasure. Enjoy your trip!", p: T(["¡Genial! Ha sido un placer. ¡Disfrute del viaje!", "Super ! C'était un plaisir de discuter. Bon séjour !", "Perfetto! È stato un piacere. Buon viaggio!", "Ótimo! Foi um prazer. Boa viagem!", "Toll! Es war schön, Sie kennenzulernen. Gute Reise!", "Τέλεια! Χάρηκα πολύ. Καλό ταξίδι!"]) } },
   };
 
@@ -493,9 +638,20 @@ h2 { font: 700 13px/1.2 var(--font-body); text-transform: uppercase; letter-spac
   }
 
   const fillEn = (t) => t.replace(/\{(\w+)\}/g, (_, k) => FILL[S.lang][k] || k);
-  function hasKey(text, keys) {
+  // How strongly an answer matches a list of keywords: the length of the longest keyword found, or 0.
+  function keyScore(text, keys) {
     const n = " " + normalize(text) + " ";
-    return (keys || []).some((k) => k.endsWith("*") ? n.includes(" " + normalize(k.slice(0, -1))) : n.includes(" " + normalize(k) + " "));
+    let best = 0;
+    for (const k of keys || []) {
+      const w = normalize(k.endsWith("*") ? k.slice(0, -1) : k);
+      if (w && (k.endsWith("*") ? n.includes(" " + w) : n.includes(" " + w + " "))) best = Math.max(best, w.length);
+    }
+    return best;
+  }
+  function bestOption(st, text) {
+    let best = null, score = 0;
+    for (const o of st.o || []) { const s = o.k ? keyScore(text, o.k[S.lang]) : 0; if (s > score) { best = o; score = s; } }
+    return best;
   }
   function freeTurn(userText) {
     const sc = FREE[S.scene], l = S.lang;
@@ -505,7 +661,7 @@ h2 { font: 700 13px/1.2 var(--font-body); text-transform: uppercase; letter-spac
       const st = sc.steps[0]; return { reply: st.p[l], translation: fillEn(st.en), ...hintOf(st) };
     }
     const st = sc.steps[S.freeStep];
-    const opt = (st.o || []).find((o) => o.k && hasKey(userText, o.k[l]));
+    const opt = bestOption(st, userText);
     if (!opt && !st.any && ++S.freeMiss < 2) {
       return { reply: SORRY[l] + " " + st.p[l], translation: "Sorry? " + fillEn(st.en), ...hintOf(st), sayHint: true };
     }
@@ -747,74 +903,103 @@ Write ${name}'s next turn. Return only a JSON object:
     el.innerHTML = `<span class="score"></span> <span></span><br><b></b>`;
     el.children[0].textContent = score + "%"; el.children[1].textContent = words; el.children[3].textContent = target;
   }
+  // One practice card per question the local asks, with every answer that works for it.
   function scriptItems() {
-    const seen = new Set(), items = [];
-    for (const st of FREE[S.scene].steps) for (const o of st.o || []) {
-      const target = o.say[S.lang]; if (seen.has(target)) continue; seen.add(target);
-      items.push({ en: fillEn(o.en), target, kind: items.length % 2 ? "say" : "type" });
-    }
-    return items;
+    return FREE[S.scene].steps.map((st) => ({
+      q: st.p[S.lang], q_en: fillEn(st.en),
+      answers: (st.o || []).filter((o) => !o.stay).map((o) => ({ en: fillEn(o.en), target: o.say[S.lang] })),
+    }));
   }
   function practiceItems() {
-    const key = S.lang + ":" + S.scene;
-    if (S.mode !== "ai") return scriptItems();
-    if (S.practice && S.practiceKey === key) return S.practice;
-    return STARTER.map((x, i) => ({ en: x.en, target: x[S.lang], kind: i % 2 ? "say" : "type" }));
+    if (S.mode === "ai" && S.practice && S.practiceKey === S.lang + ":" + S.scene) return S.practice;
+    return scriptItems();
+  }
+  // Grade against the chosen answer, but count any other answer for that question as right too.
+  function gradeAnswer(res, said, item, chosen) {
+    let best = chosen, bestScore = similarity(said, chosen.target);
+    for (const a of item.answers) { const s = similarity(said, a.target); if (s > bestScore + 5) { best = a; bestScore = s; } }
+    res.hidden = false; grade(res, bestScore, best.target);
+    if (best !== chosen && bestScore >= 80) res.children[1].textContent = `That works too: "${best.en}"`;
+  }
+  function listenOnce(btn, onText) {
+    const r = new SR(); r.lang = L().bcp; r.interimResults = true; btn.textContent = "Listening…";
+    let heardText = "", done = false, silence = null;
+    const finish = () => {
+      if (done) return; done = true; clearTimeout(silence); try { r.abort(); } catch {}
+      btn.textContent = "Say it"; if (heardText.trim()) onText(heardText.trim());
+    };
+    r.onresult = (e) => {
+      let t = "", allFinal = true;
+      for (const x of e.results) { t += x[0].transcript; if (!x.isFinal) allFinal = false; }
+      heardText = t; clearTimeout(silence);
+      if (allFinal && t.trim()) finish(); else silence = setTimeout(finish, 1300);
+    };
+    r.onerror = (e) => { if (e.error === "not-allowed" || e.error === "service-not-allowed") { S.micBlocked = true; btn.disabled = true; onText(null); } };
+    r.onend = finish;
+    try { r.start(); } catch { done = true; btn.textContent = "Say it"; }
   }
   function renderPractice() {
     const items = practiceItems();
-    const generated = S.mode !== "ai" || (S.practiceKey === S.lang + ":" + S.scene && S.practice);
     $("p-new").hidden = S.mode !== "ai";
-    $("p-lede").textContent = S.mode !== "ai" ? `Phrases from "${SC().title}" in ${L().name}. Type it: write the phrase. Say it: hear it, say it back, and get a score.` : "Type it: write the phrase in your new language. Say it: hear the phrase, then say it back and get a score.";
-    $("p-status").hidden = !!generated; $("p-status").className = "note";
-    if (!generated) $("p-status").textContent = `Starter set: café phrases in ${L().name}. Tap "New set for this scene" for phrases from "${SC().title}".`;
+    $("p-status").hidden = true;
+    $("p-lede").textContent = `"${SC().title}" in ${L().name}. Each card is a question ${partnerName()} asks. Pick an answer, then type it or say it. Any answer that fits the question counts.`;
     $("cards").innerHTML = "";
-    items.forEach((it) => {
+    items.forEach((it, idx) => {
+      if (!it.answers || !it.answers.length) return;
+      let chosen = it.answers[0], mode = idx % 2 ? "say" : "type";
       const c = document.createElement("div"); c.className = "card";
-      if (it.kind === "type") {
-        c.innerHTML = `<span class="kind">Type it · ${L().name}</span><div class="prompt"></div><div class="row"><input aria-label="Your answer"><button class="ghost">Check</button></div><div class="result" hidden></div>`;
-        c.querySelector(".prompt").textContent = it.en;
-        const inp = c.querySelector("input"), res = c.querySelector(".result");
-        if (S.lang === "el") inp.placeholder = "Greek letters or Latin letters both work";
-        const check = () => { res.hidden = false; grade(res, similarity(inp.value, it.target), it.target); };
-        c.querySelector("button").onclick = check; inp.onkeydown = (e) => { if (e.key === "Enter") check(); };
-      } else {
-        c.innerHTML = `<span class="kind">Say it · ${L().name}</span><div class="target"></div><div class="en" style="color:var(--muted)"></div><div class="row"><button class="ghost">Hear it</button><button class="ghost">Say it</button></div><div class="result" hidden></div>`;
-        c.querySelector(".target").textContent = it.target; c.querySelector(".en").textContent = it.en;
-        const [hear, say] = c.querySelectorAll("button"), res = c.querySelector(".result");
-        hear.onclick = () => speak(it.target, L().bcp, targetRate());
-        if (!SR || S.micBlocked) { say.disabled = true; say.title = "The microphone isn't available here"; }
-        say.onclick = () => {
-          const r = new SR(); r.lang = L().bcp; r.interimResults = true; say.textContent = "Listening…";
-          let heardText = "", done = false, silence = null;
-          const finish = () => {
-            if (done) return; done = true; clearTimeout(silence); try { r.abort(); } catch {}
-            say.textContent = "Say it";
-            if (heardText.trim()) { res.hidden = false; grade(res, similarity(heardText, it.target), it.target); res.insertAdjacentText("beforeend", ` · You said: "${heardText.trim()}"`); }
-          };
-          r.onresult = (e) => {
-            let t = "", allFinal = true;
-            for (const x of e.results) { t += x[0].transcript; if (!x.isFinal) allFinal = false; }
-            heardText = t; clearTimeout(silence);
-            if (allFinal && t.trim()) finish(); else silence = setTimeout(finish, 1300);
-          };
-          r.onerror = (e) => { if (e.error === "not-allowed" || e.error === "service-not-allowed") { S.micBlocked = true; say.disabled = true; res.hidden = false; res.className = "result"; res.textContent = "The microphone isn't available here. Use Hear it and repeat out loud."; } };
-          r.onend = finish;
-          try { r.start(); } catch { done = true; say.textContent = "Say it"; }
-        };
+      c.innerHTML = `<span class="kind">Question ${idx + 1} of ${items.length}</span>
+        <div class="ask"><span class="label"></span><div class="q"></div><div class="q-en"></div><div><button class="ghost small hear-q">Hear the question</button></div></div>
+        <span class="label">Your answer</span><div class="chips"></div>
+        <div class="seg two mini"><button data-m="type">Type it</button><button data-m="say">Say it</button></div>
+        <div class="body"></div><div class="result" hidden></div>`;
+      c.querySelector(".ask .label").textContent = `${partnerName()} asks`;
+      c.querySelector(".q").textContent = it.q; c.querySelector(".q-en").textContent = it.q_en || "";
+      c.querySelector(".hear-q").onclick = () => speak(it.q, L().bcp, targetRate());
+      const chips = c.querySelector(".chips"), body = c.querySelector(".body"), res = c.querySelector(".result");
+      it.answers.forEach((a) => {
+        const b = document.createElement("button"); b.className = "chip"; b.textContent = a.en;
+        b.onclick = () => { chosen = a; res.hidden = true; draw(); };
+        chips.append(b);
+      });
+      c.querySelectorAll(".mini button").forEach((b) => (b.onclick = () => { mode = b.dataset.m; res.hidden = true; draw(); }));
+      function draw() {
+        chips.querySelectorAll(".chip").forEach((b, i) => b.setAttribute("aria-pressed", String(it.answers[i] === chosen)));
+        c.querySelectorAll(".mini button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.m === mode)));
+        if (mode === "type") {
+          body.innerHTML = `<div class="prompt"></div><div class="row"><input aria-label="Your answer"><button class="ghost">Check</button></div>`;
+          body.querySelector(".prompt").textContent = `Write in ${L().name}: ${chosen.en}`;
+          const inp = body.querySelector("input");
+          if (S.lang === "el") inp.placeholder = "Greek letters or Latin letters both work";
+          const check = () => { if (inp.value.trim()) gradeAnswer(res, inp.value, it, chosen); };
+          body.querySelector("button").onclick = check; inp.onkeydown = (e) => { if (e.key === "Enter") check(); };
+        } else {
+          body.innerHTML = `<div class="target"></div><div class="row"><button class="ghost">Hear it</button><button class="ghost">Say it</button></div>`;
+          body.querySelector(".target").textContent = chosen.target;
+          const [hear, say] = body.querySelectorAll("button");
+          hear.onclick = () => speak(chosen.target, L().bcp, targetRate());
+          if (!SR || S.micBlocked) { say.disabled = true; say.title = "The microphone isn't available here"; }
+          say.onclick = () => listenOnce(say, (t) => {
+            if (t == null) { res.hidden = false; res.className = "result"; res.textContent = "The microphone isn't available here. Use Hear it and repeat out loud."; return; }
+            gradeAnswer(res, t, it, chosen); res.insertAdjacentText("beforeend", ` · You said: "${t}"`);
+          });
+        }
       }
+      draw();
       $("cards").append(c);
     });
   }
   $("p-new").onclick = async () => {
-    if (S.mode !== "ai") { S.practice = scriptItems(); S.practiceKey = S.lang + ":" + S.scene; return renderPractice(); }
     const b = $("p-new"); b.disabled = true; b.textContent = "Making a set…";
     const l = L(), s = SC(), lv = LV();
     try {
-      const out = await askClaude(`Write 6 short, useful phrases a traveler needs in this situation in ${l.city}, ${l.country}: ${s.desc}
+      const out = await askClaude(`Write 5 questions a local might ask a traveler in this situation in ${l.city}, ${l.country}: ${s.desc}
+For each question, give 3 different short answers the traveler could give.
 Level: ${lv.label} (${lv.cefr}). ${lv.rule}${S.lang === "pt" ? " Use European Portuguese." : ""}
-Return only JSON: {"items": [{"en": "English meaning", "target": "the phrase in ${l.name}"}]}`);
-      const items = (out.items || []).filter((x) => x.en && x.target).slice(0, 8).map((x, i) => ({ en: x.en, target: x.target, kind: i % 2 ? "say" : "type" }));
+Return only JSON: {"items": [{"q": "the question in ${l.name}", "q_en": "the question in English", "answers": [{"en": "an answer in English", "target": "that answer in ${l.name}"}]}]}`);
+      const items = (out.items || []).filter((x) => x.q && Array.isArray(x.answers))
+        .map((x) => ({ q: x.q, q_en: x.q_en || "", answers: x.answers.filter((a) => a.en && a.target).slice(0, 5) }))
+        .filter((x) => x.answers.length).slice(0, 8);
       if (items.length) { S.practice = items; S.practiceKey = S.lang + ":" + S.scene; }
       renderPractice();
     } catch (e) { $("p-status").hidden = false; $("p-status").className = "note warn"; $("p-status").textContent = (e && e.message) || "Couldn't make a new set. Try again."; }
