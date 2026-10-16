@@ -105,8 +105,8 @@ h2 { font: 700 13px/1.2 var(--font-body); text-transform: uppercase; letter-spac
 @media (prefers-reduced-motion: reduce) { .orb::after { animation: none !important; } }
 .stage-hint { color: var(--muted); font-size: 14px; text-align: center; max-width: 34ch; margin: 0; }
 
-.controls { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
-.controls button { border: 1.5px solid var(--line); background: var(--surface); border-radius: 12px; padding: 12px 6px; font-weight: 700; font-size: 15px; }
+.controls { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.controls button { border: 1.5px solid var(--line); background: var(--surface); border-radius: 12px; padding: 12px 4px; font-weight: 700; font-size: 14px; }
 .controls button:disabled { opacity: .45; cursor: default; }
 
 .log { display: flex; flex-direction: column; gap: 10px; }
@@ -115,6 +115,7 @@ h2 { font: 700 13px/1.2 var(--font-body); text-transform: uppercase; letter-spac
 .msg.me { align-self: flex-end; background: var(--surface-2); border-bottom-right-radius: 5px; }
 .msg .who { font: 700 12px/1.2 var(--font-body); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 3px; }
 .msg .text { font-size: 18px; line-height: 1.4; }
+.msg .suggest { color: var(--muted); font-size: 15px; margin-top: 6px; }
 .msg .en { color: var(--muted); font-size: 15px; margin-top: 6px; font-style: italic; }
 .msg .tools { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
 .msg .tools button { border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 3px 10px; font-size: 13px; font-weight: 700; color: var(--muted); }
@@ -178,6 +179,7 @@ h2 { font: 700 13px/1.2 var(--font-body); text-transform: uppercase; letter-spac
 
     <h2>Your level</h2>
     <div class="seg" id="levels" role="group" aria-label="Level"></div>
+    <p class="note" id="lvl-note"></p>
 
     <h2>Conversation partner</h2>
     <div class="seg two" id="modes" role="group" aria-label="Conversation partner">
@@ -187,7 +189,7 @@ h2 { font: 700 13px/1.2 var(--font-body); text-transform: uppercase; letter-spac
     <p class="note" id="mode-note"></p>
 
     <h2>Hands-free</h2>
-    <div class="opt"><input type="checkbox" id="opt-hands" checked><label for="opt-hands"><b>Listen automatically</b><small>After the local speaks, the mic opens on its own. Say "repeat", "slower", "help", "skip" or "stop" any time, in English or your new language.</small></label></div>
+    <div class="opt"><input type="checkbox" id="opt-hands" checked><label for="opt-hands"><b>Listen automatically</b><small>After the local speaks, the mic opens on its own. Say "repeat", "slower", "help", "skip", "start over" or "stop" any time, in English or your new language.</small></label></div>
     <div class="opt"><input type="checkbox" id="opt-tips" checked><label for="opt-tips"><b>Speak corrections in English</b><small>When you make a mistake, you hear a short tip and the better way to say it.</small></label></div>
 
     <div id="conn" hidden>
@@ -217,6 +219,7 @@ h2 { font: 700 13px/1.2 var(--font-body); text-transform: uppercase; letter-spac
         <button id="c-repeat">Repeat</button>
         <button id="c-en">In English</button>
         <button id="c-hint">Help me</button>
+        <button id="c-restart">Start over</button>
       </div>
       <div class="log" id="log" aria-live="polite"></div>
       <form class="composer" id="composer">
@@ -265,9 +268,9 @@ h2 { font: 700 13px/1.2 var(--font-body); text-transform: uppercase; letter-spac
     { id: "chat", title: "Meet a local", sub: "Small talk in a park", role: "friendly local", desc: "a park bench. You start a friendly chat with the traveler about where they are from, their trip and what they should see in the city." },
   ];
   const LEVELS = [
-    { id: "beginner", label: "Beginner", cefr: "A1", rate: 0.82, rule: "Use very simple, common words and the present tense. At most 10 words per sentence. One sentence per reply when possible." },
-    { id: "intermediate", label: "Getting there", cefr: "B1", rate: 0.93, rule: "Use everyday language at a natural but clear pace. One or two sentences." },
-    { id: "advanced", label: "Confident", cefr: "C1", rate: 1.0, rule: "Speak naturally like a real local, with idioms where they fit. Up to two sentences." },
+    { id: "beginner", label: "Beginner", cefr: "A1", rate: 0.82, about: "Slow speech. The English and a suggested answer show under every line.", rule: "Use very simple, common words and the present tense. At most 10 words per sentence. One sentence per reply when possible." },
+    { id: "intermediate", label: "Getting there", cefr: "B1", rate: 0.93, about: "A little faster. Tap Show English when you need it, and you'll hear a suggested answer if yours doesn't fit.", rule: "Use everyday language at a natural but clear pace. One or two sentences." },
+    { id: "advanced", label: "Confident", cefr: "C1", rate: 1.0, about: "Normal speed and harder, more natural lines. You only get a suggested answer after two misses.", rule: "Speak naturally like a real local, with idioms where they fit. Up to two sentences." },
   ];
   // Spoken commands, matched in English and each language.
   const COMMANDS = {
@@ -275,6 +278,7 @@ h2 { font: 700 13px/1.2 var(--font-body); text-transform: uppercase; letter-spac
     slower: ["slower", "slow down", "mas despacio", "despacio", "plus lentement", "lentement", "piu lentamente", "piu piano", "piano", "mais devagar", "devagar", "langsamer", "πιο αργα", "σιγα"],
     help: ["help", "hint", "help me", "ayuda", "aide", "aiuto", "ajuda", "hilfe", "βοηθεια"],
     english: ["english", "translate", "in english", "ingles", "anglais", "inglese", "englisch", "αγγλικα"],
+    restart: ["restart", "start over", "start again", "reiniciar", "empezar de nuevo", "recommencer", "ricominciare", "ricomincia", "recomecar", "neu starten", "von vorne", "απο την αρχη"],
     skip: ["skip", "next", "next question", "siguiente", "suivant", "prossimo", "seguinte", "proximo", "weiter", "nachste", "επομενο"],
     stop: ["stop", "pause", "para", "basta", "arrete", "stopp", "halt", "parar", "σταματα"],
   };
@@ -569,6 +573,38 @@ h2 { font: 700 13px/1.2 var(--font-body); text-transform: uppercase; letter-spac
       end: { en: "Great! It was a pleasure. Enjoy your trip!", p: T(["¡Genial! Ha sido un placer. ¡Disfrute del viaje!", "Super ! C'était un plaisir de discuter. Bon séjour !", "Perfetto! È stato un piacere. Buon viaggio!", "Ótimo! Foi um prazer. Boa viagem!", "Toll! Es war schön, Sie kennenzulernen. Gute Reise!", "Τέλεια! Χάρηκα πολύ. Καλό ταξίδι!"]) } },
   };
 
+  // Harder lines for the Confident level: same question, said the way a local really would.
+  const HARDER = {
+    "Good morning! What would you like?": ["Good morning! What can I get you? Take your time, no rush.", ["¡Buenos días! ¿Qué le apetece tomar? Sin prisa, tómese su tiempo.", "Bonjour ! Qu'est-ce qui vous ferait plaisir ? Prenez votre temps, rien ne presse.", "Buongiorno! Cosa le andrebbe di prendere? Con calma, non c'è fretta.", "Bom dia! O que lhe apetece tomar? Esteja à vontade, não há pressa.", "Guten Morgen! Worauf hätten Sie denn Lust? Lassen Sie sich ruhig Zeit.", "Καλημέρα σας! Τι θα θέλατε να πάρετε; Με την ησυχία σας, δεν βιαζόμαστε."]],
+    "Anything to eat? We have croissants, toast and cake.": ["Would you like something to eat with that? The croissants just came out of the oven, and we also have toast and homemade cake.", ["¿Le pongo algo de comer? Los cruasanes acaban de salir del horno, y también tenemos tostadas y tarta casera.", "Je vous mets quelque chose à manger avec ça ? Les croissants sortent du four, et on a aussi des tartines et du gâteau maison.", "Le porto anche qualcosa da mangiare? I cornetti sono appena sfornati, e abbiamo anche toast e torte fatte in casa.", "Vai querer alguma coisa para comer? Os croissants acabaram de sair do forno, e também temos torradas e bolo caseiro.", "Darf es noch etwas zu essen sein? Die Croissants kommen gerade frisch aus dem Ofen, und wir haben auch Toast und selbstgebackenen Kuchen.", "Θα θέλατε και κάτι να φάτε; Τα κρουασάν μόλις βγήκαν από τον φούρνο, και έχουμε επίσης τοστ και σπιτικό κέικ."]],
+    "For here or to take away?": ["Will you have it here, or shall I make it to take away?", ["¿Se lo toma aquí o se lo preparo para llevar?", "Vous le prenez sur place ou je vous le prépare à emporter ?", "Lo consuma qui o glielo preparo da portare via?", "É para comer aqui ou prefere que embrulhe para levar?", "Möchten Sie das hier trinken, oder soll ich es Ihnen zum Mitnehmen machen?", "Θα το πιείτε εδώ ή να σας το βάλω σε πακέτο;"]],
+    "That's four euros fifty. Cash or card?": ["All together that comes to four euros fifty. Are you paying in cash or by card?", ["En total son cuatro euros con cincuenta. ¿Va a pagar en efectivo o con tarjeta?", "Ça vous fera quatre euros cinquante en tout. Vous réglez en espèces ou par carte ?", "In tutto fanno quattro euro e cinquanta. Paga in contanti o con la carta?", "Ao todo são quatro euros e cinquenta. Paga em dinheiro ou com cartão?", "Zusammen macht das vier Euro fünfzig. Zahlen Sie bar oder mit Karte?", "Όλα μαζί κάνουν τέσσερα πενήντα. Θα πληρώσετε με μετρητά ή με κάρτα;"]],
+    "Hi! Do you need help?": ["Excuse me, you look a bit lost. Can I help you find something?", ["Perdone, parece un poco perdido. ¿Le puedo ayudar a encontrar algo?", "Excusez-moi, vous avez l'air un peu perdu. Je peux vous aider à trouver quelque chose ?", "Mi scusi, mi sembra un po' perso. Posso aiutarla a trovare qualcosa?", "Desculpe, parece um bocado perdido. Posso ajudá-lo a encontrar alguma coisa?", "Entschuldigung, Sie sehen ein bisschen verloren aus. Kann ich Ihnen helfen, etwas zu finden?", "Συγγνώμη, μου φαίνεστε λίγο χαμένος. Μπορώ να σας βοηθήσω να βρείτε κάτι;"]],
+    "It's not far. Go straight ahead and then turn left.": ["Oh, it's really close. Keep going straight ahead until the traffic lights, and then turn left.", ["Ah, está muy cerca. Siga todo recto hasta el semáforo y luego gire a la izquierda.", "Ah, c'est tout près. Continuez tout droit jusqu'au feu, puis tournez à gauche.", "Ah, è vicinissimo. Vada sempre dritto fino al semaforo e poi giri a sinistra.", "Ah, é mesmo aqui perto. Siga sempre em frente até aos semáforos e depois vire à esquerda.", "Ach, das ist ganz in der Nähe. Gehen Sie immer geradeaus bis zur Ampel und dann links.", "Α, είναι πολύ κοντά. Συνεχίστε ευθεία μέχρι το φανάρι και μετά στρίψτε αριστερά."]],
+    "It's about ten minutes on foot.": ["On foot it'll take you about ten minutes, and it's a lovely walk.", ["Andando tardará unos diez minutos, y el paseo es muy bonito.", "À pied, vous en avez pour dix minutes environ, et la balade est très jolie.", "A piedi ci vorranno una decina di minuti, ed è una bella passeggiata.", "A pé demora uns dez minutos, e o passeio é muito bonito.", "Zu Fuß brauchen Sie ungefähr zehn Minuten, und es ist ein schöner Spaziergang.", "Με τα πόδια θα κάνετε περίπου δέκα λεπτά, και η διαδρομή είναι πολύ όμορφη."]],
+    "Where are you from, by the way?": ["By the way, I hear an accent. Where are you from?", ["Por cierto, noto un acento. ¿De dónde es usted?", "Au fait, j'entends un petit accent. Vous venez d'où ?", "A proposito, sento un certo accento. Lei di dov'è?", "Já agora, noto um sotaque. De onde é?", "Übrigens, ich höre einen Akzent. Woher kommen Sie denn?", "Παρεμπιπτόντως, ακούω μια προφορά. Από πού είστε;"]],
+    "Good evening. Do you have a reservation?": ["Good evening and welcome. Have you booked a room with us?", ["Buenas tardes y bienvenido. ¿Tiene una reserva con nosotros?", "Bonsoir et bienvenue. Vous avez réservé chez nous ?", "Buonasera e benvenuto. Ha prenotato da noi?", "Boa tarde e bem-vindo. Tem uma reserva connosco?", "Guten Abend und herzlich willkommen. Haben Sie bei uns reserviert?", "Καλησπέρα και καλώς ήρθατε. Έχετε κάνει κράτηση σε εμάς;"]],
+    "Perfect. Your passport, please.": ["Perfect. Could I see your passport, please? I just need it for the registration.", ["Perfecto. ¿Me deja su pasaporte, por favor? Lo necesito para el registro.", "Parfait. Je peux voir votre passeport, s'il vous plaît ? J'en ai besoin pour l'enregistrement.", "Perfetto. Posso vedere il suo passaporto, per favore? Mi serve per la registrazione.", "Perfeito. Pode mostrar-me o seu passaporte, por favor? Preciso dele para o registo.", "Perfekt. Dürfte ich bitte Ihren Reisepass sehen? Den brauche ich für die Anmeldung.", "Τέλεια. Μπορώ να δω το διαβατήριό σας, παρακαλώ; Το χρειάζομαι για την καταχώριση."]],
+    "How many nights are you staying?": ["And how many nights will you be staying with us?", ["¿Y cuántas noches se va a quedar con nosotros?", "Et vous restez combien de nuits parmi nous ?", "E quante notti si fermerà da noi?", "E quantas noites vai ficar connosco?", "Und wie viele Nächte bleiben Sie bei uns?", "Και πόσες νύχτες θα μείνετε μαζί μας;"]],
+    "Very good. Your room is 204, on the second floor. Any questions?": ["Wonderful. Here's your key: room 204, on the second floor. The lift is just behind you. Is there anything else I can help with?", ["Estupendo. Aquí tiene la llave: habitación 204, en la segunda planta. El ascensor está justo detrás de usted. ¿Le puedo ayudar en algo más?", "Très bien. Voici votre clé : chambre 204, au deuxième étage. L'ascenseur est juste derrière vous. Je peux vous aider pour autre chose ?", "Benissimo. Ecco la chiave: camera 204, al secondo piano. L'ascensore è proprio dietro di lei. Posso aiutarla in qualcos'altro?", "Ótimo. Aqui tem a chave: quarto 204, no segundo andar. O elevador fica mesmo atrás de si. Posso ajudar em mais alguma coisa?", "Wunderbar. Hier ist Ihr Schlüssel: Zimmer 204 im zweiten Stock. Der Aufzug ist direkt hinter Ihnen. Kann ich sonst noch etwas für Sie tun?", "Πολύ ωραία. Ορίστε το κλειδί σας: δωμάτιο 204, στον δεύτερο όροφο. Το ασανσέρ είναι ακριβώς πίσω σας. Μπορώ να σας βοηθήσω σε κάτι άλλο;"]],
+    "Hello! Fresh fruit today. What would you like?": ["Hello there! Everything came in fresh this morning. What can I get you?", ["¡Hola, buenas! Todo ha llegado fresquito esta mañana. ¿Qué le pongo?", "Bonjour ! Tout est arrivé ce matin, c'est bien frais. Qu'est-ce que je vous mets ?", "Buongiorno! È tutto arrivato fresco stamattina. Cosa le do?", "Olá, bom dia! Chegou tudo fresquinho esta manhã. O que vai ser?", "Hallo! Alles ist heute Morgen frisch reingekommen. Was darf ich Ihnen geben?", "Γεια σας! Όλα ήρθαν φρέσκα σήμερα το πρωί. Τι να σας βάλω;"]],
+    "Here you go. Anything else?": ["There you are. Anything else for you today?", ["Aquí tiene. ¿Le pongo algo más hoy?", "Voilà pour vous. Je vous mets autre chose aujourd'hui ?", "Ecco a lei. Le serve altro oggi?", "Aqui tem. Vai querer mais alguma coisa hoje?", "Bitte schön. Darf es heute sonst noch etwas sein?", "Ορίστε. Θα θέλατε κάτι άλλο σήμερα;"]],
+    "That's three euros.": ["Let me see... that comes to three euros altogether.", ["A ver... son tres euros en total.", "Voyons voir... ça fait trois euros en tout.", "Vediamo... sono tre euro in tutto.", "Deixe-me ver... são três euros ao todo.", "Mal sehen... das macht zusammen drei Euro.", "Για να δούμε... κάνουν τρία ευρώ όλα μαζί."]],
+    "Hello. Where are you traveling to?": ["Hello, next please. Where would you like to travel to today?", ["Hola, el siguiente, por favor. ¿Adónde quiere viajar hoy?", "Bonjour, au suivant. Vous souhaitez aller où aujourd'hui ?", "Buongiorno, il prossimo. Dove desidera andare oggi?", "Olá, o próximo, por favor. Para onde deseja viajar hoje?", "Hallo, der Nächste bitte. Wohin möchten Sie heute fahren?", "Γεια σας, ο επόμενος παρακαλώ. Πού θα θέλατε να ταξιδέψετε σήμερα;"]],
+    "One way or return?": ["Would you like just one way, or a return ticket as well?", ["¿Lo quiere solo de ida, o también de vuelta?", "Vous voulez un aller simple, ou un aller-retour ?", "Lo vuole di sola andata, o anche il ritorno?", "Quer só ida, ou também regresso?", "Möchten Sie nur die einfache Fahrt, oder auch zurück?", "Θέλετε μόνο απλή μετάβαση ή και επιστροφή;"]],
+    "There's a train at a quarter past ten. Is that OK?": ["The next train leaves at a quarter past ten from platform three. Does that work for you?", ["El próximo tren sale a las diez y cuarto del andén tres. ¿Le viene bien?", "Le prochain train part à dix heures et quart, voie trois. Ça vous convient ?", "Il prossimo treno parte alle dieci e un quarto dal binario tre. Le va bene?", "O próximo comboio sai às dez e um quarto da linha três. Dá-lhe jeito?", "Der nächste Zug fährt um Viertel nach zehn von Gleis drei. Passt Ihnen das?", "Το επόμενο τρένο φεύγει στις δέκα και τέταρτο από την αποβάθρα τρία. Σας βολεύει;"]],
+    "Window or aisle seat?": ["And would you prefer a seat by the window or on the aisle?", ["¿Y prefiere asiento de ventanilla o de pasillo?", "Et vous préférez une place côté fenêtre ou côté couloir ?", "E preferisce il posto al finestrino o sul corridoio?", "E prefere lugar à janela ou no corredor?", "Und hätten Sie lieber einen Fensterplatz oder einen Platz am Gang?", "Και προτιμάτε θέση στο παράθυρο ή στον διάδρομο;"]],
+    "Good evening! A table for how many?": ["Good evening, welcome! How many of you are there tonight?", ["¡Buenas noches, bienvenidos! ¿Cuántos son esta noche?", "Bonsoir, bienvenue ! Vous êtes combien ce soir ?", "Buonasera, benvenuti! In quanti siete stasera?", "Boa noite, bem-vindos! Quantas pessoas são esta noite?", "Guten Abend, herzlich willkommen! Wie viele Personen sind Sie heute Abend?", "Καλησπέρα, καλώς ήρθατε! Πόσα άτομα είστε απόψε;"]],
+    "Today I recommend the {dish}. What will you have?": ["Tonight the chef recommends the {dish}, and it's excellent. Have you decided what you'd like?", ["Hoy el chef recomienda la paella, y está buenísima. ¿Ya sabe lo que va a tomar?", "Ce soir, le chef vous conseille le bœuf bourguignon, il est excellent. Vous avez choisi ?", "Stasera lo chef consiglia la carbonara, ed è ottima. Ha già deciso cosa prendere?", "Hoje a especialidade da casa é o bacalhau à Brás, e está ótimo. Já sabe o que vai querer?", "Heute Abend empfiehlt der Koch das Schnitzel, und es ist ausgezeichnet. Haben Sie sich schon entschieden?", "Απόψε ο σεφ προτείνει τον μουσακά, και είναι εξαιρετικός. Αποφασίσατε τι θα πάρετε;"]],
+    "And to drink?": ["And what can I bring you to drink? We have a very nice house wine.", ["¿Y para beber? Tenemos un vino de la casa muy rico.", "Et comme boisson ? Nous avons un très bon vin maison.", "E da bere? Abbiamo un vino della casa molto buono.", "E para beber? Temos um vinho da casa muito bom.", "Und zu trinken? Wir haben einen sehr guten Hauswein.", "Και τι θα πιείτε; Έχουμε ένα πολύ ωραίο κρασί του σπιτιού."]],
+    "Did you enjoy your meal?": ["So, how was everything? Did you enjoy your dinner?", ["¿Qué tal todo? ¿Le ha gustado la cena?", "Alors, tout s'est bien passé ? Le repas vous a plu ?", "Allora, com'è andata? Le è piaciuta la cena?", "Então, estava tudo bem? Gostou do jantar?", "Na, wie war's? Hat es Ihnen geschmeckt?", "Λοιπόν, πώς ήταν όλα; Σας άρεσε το φαγητό;"]],
+    "Hello! Nice day, isn't it?": ["Hello! What gorgeous weather today, don't you think?", ["¡Hola! Qué día tan bonito hace hoy, ¿no le parece?", "Bonjour ! Quel temps magnifique aujourd'hui, vous ne trouvez pas ?", "Salve! Che bella giornata oggi, non trova?", "Olá! Que dia tão bonito está hoje, não acha?", "Hallo! Was für ein herrliches Wetter heute, finden Sie nicht?", "Γεια σας! Τι υπέροχη μέρα σήμερα, δεν βρίσκετε;"]],
+    "Are you a tourist? Where are you from?": ["You're not from around here, are you? Where are you from?", ["Usted no es de aquí, ¿verdad? ¿De dónde es?", "Vous n'êtes pas d'ici, n'est-ce pas ? Vous venez d'où ?", "Lei non è di qui, vero? Di dov'è?", "Não é de cá, pois não? De onde é?", "Sie sind nicht von hier, oder? Woher kommen Sie?", "Δεν είστε από εδώ, έτσι; Από πού είστε;"]],
+    "How long are you staying in {city}?": ["And how long are you planning to stay in {city}?", ["¿Y cuánto tiempo piensa quedarse en Madrid?", "Et vous comptez rester combien de temps à Paris ?", "E quanto tempo pensa di restare a Roma?", "E quanto tempo tenciona ficar em Lisboa?", "Und wie lange haben Sie vor, in Berlin zu bleiben?", "Και πόσο καιρό σκοπεύετε να μείνετε στην Αθήνα;"]],
+    "You have to see {sight}. Do you like museums?": ["If you get the chance, don't miss {sight}. Do you like museums?", ["Si tiene ocasión, no se pierda el Museo del Prado. ¿Le gustan los museos?", "Si vous en avez l'occasion, ne manquez pas le musée d'Orsay. Vous aimez les musées ?", "Se ha l'occasione, non si perda i Musei Vaticani. Le piacciono i musei?", "Se tiver oportunidade, não perca o Mosteiro dos Jerónimos. Gosta de museus?", "Wenn Sie Gelegenheit haben, sollten Sie unbedingt die Museumsinsel besuchen. Mögen Sie Museen?", "Αν έχετε την ευκαιρία, μην χάσετε το Μουσείο της Ακρόπολης. Σας αρέσουν τα μουσεία;"]],
+  };
+  for (const sc of Object.values(FREE)) for (const st of sc.steps) if (HARDER[st.en]) { st.ae = HARDER[st.en][0]; st.a = T(HARDER[st.en][1]); }
+
   // ---------- State ----------
   const store = {
     get(k, d) { try { const v = localStorage.getItem("abroad:" + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
@@ -609,12 +645,13 @@ h2 { font: 700 13px/1.2 var(--font-body); text-transform: uppercase; letter-spac
     for (const lv of LEVELS) {
       const b = document.createElement("button");
       b.textContent = lv.label; b.setAttribute("aria-pressed", String(lv.id === S.level));
-      b.onclick = () => { S.level = lv.id; store.set("level", lv.id); renderTrip(); };
+      b.onclick = () => { S.level = lv.id; store.set("level", lv.id); resetConversation(); renderTrip(); };
       $("levels").append(b);
     }
     $("b-code").textContent = $("t-code").textContent = L().iata;
     $("b-city").textContent = `${L().city} · ${L().name}`;
     $("b-scene").textContent = $("t-scene").textContent = SC().title;
+    $("lvl-note").textContent = LV().about;
     $("b-lvl").textContent = $("t-lvl").textContent = LV().cefr;
     $("t-who").textContent = `${partnerName()} · ${SC().role}`;
     $("opt-hands").checked = S.handsFree && !S.micBlocked;
@@ -700,10 +737,12 @@ h2 { font: 700 13px/1.2 var(--font-body); text-transform: uppercase; letter-spac
   }
   // The scripted local. Only an answer that fits the question moves the scene on; anything else gets
   // "Sorry?" and a suggested answer, as many times as needed. Saying "skip" moves on without answering.
+  // The question as the local says it at the chosen level.
+  const lineOf = (st) => (S.level === "advanced" && st.a ? { p: st.a[S.lang], en: st.ae } : { p: st.p[S.lang], en: st.en });
   function freeTurn(userText, skip) {
     const sc = FREE[S.scene], l = S.lang;
     const hintOf = (st) => (st && st.o && st.o[0] ? { hint: st.o[0].say[l], hint_en: fillEn(st.o[0].en) } : { hint: "", hint_en: "" });
-    const ask = (st, pre = "", preEn = "") => ({ reply: pre + st.p[l], translation: preEn + fillEn(st.en), ...hintOf(st) });
+    const ask = (st, pre = "", preEn = "") => { const q = lineOf(st); return { reply: pre + q.p, translation: preEn + fillEn(q.en), ...hintOf(st) }; };
     if (userText == null || S.freeDone) {
       S.freeStep = 0; S.freeMiss = 0; S.freeDone = false; S.freeSub = null;
       return ask(sc.steps[0]);
@@ -713,7 +752,8 @@ h2 { font: 700 13px/1.2 var(--font-body); text-transform: uppercase; letter-spac
     if (!opt && st.free && !skip && normalize(userText)) opt = { r: null };  // e.g. any name is a fine answer to "Under what name?"
     if (!opt && !skip) {
       S.freeMiss++;
-      return { ...ask(st, SORRY[l] + " ", "Sorry? "), sayHint: true, offerSkip: S.freeMiss >= 2 };
+      // Confident learners only hear a suggested answer after the second miss.
+      return { ...ask(st, SORRY[l] + " ", "Sorry? "), sayHint: S.level !== "advanced" || S.freeMiss >= 2, offerSkip: S.freeMiss >= 2 };
     }
     S.freeMiss = 0;
     const pre = opt && opt.r ? opt.r[l] + " " : "", preEn = opt && opt.r ? opt.ren + " " : "";
@@ -832,9 +872,12 @@ Write ${name}'s next turn. Return only a JSON object:
     el.querySelector(".who").textContent = who === "partner" ? partnerName() : "You";
     el.querySelector(".text").textContent = text;
     if (who === "partner" && opts.turn) {
-      const en = document.createElement("div"); en.className = "en"; en.textContent = opts.turn.translation || ""; en.hidden = true;
+      // Beginners see the English and a suggested answer right away.
+      const easy = S.level === "beginner";
+      const en = document.createElement("div"); en.className = "en"; en.textContent = opts.turn.translation || ""; en.hidden = !easy;
       const tools = document.createElement("div"); tools.className = "tools";
-      const b1 = document.createElement("button"); b1.textContent = "Show English"; b1.onclick = () => { en.hidden = !en.hidden; b1.textContent = en.hidden ? "Show English" : "Hide English"; };
+      if (easy && opts.turn.hint) { const s = document.createElement("div"); s.className = "suggest"; s.textContent = `You could say: ${opts.turn.hint}`; el.append(s); }
+      const b1 = document.createElement("button"); b1.textContent = easy ? "Hide English" : "Show English"; b1.onclick = () => { en.hidden = !en.hidden; b1.textContent = en.hidden ? "Show English" : "Hide English"; };
       const b2 = document.createElement("button"); b2.textContent = "Play again"; b2.onclick = () => speak(text, L().bcp, targetRate());
       tools.append(b1, b2); el.append(en, tools);
     }
@@ -894,6 +937,7 @@ Write ${name}'s next turn. Return only a JSON object:
     const lp = lastPartner(); const my = ++turnId;
     if (cmd === "stop") { S.active = false; setStatus("paused"); await speak("Paused.", "en-US", 1); return; }
     if (cmd === "skip" && S.mode !== "ai" && lp) return partnerTurn(true);
+    if (cmd === "restart") return restart();
     setStatus("speaking");
     if (cmd === "slower") S.slow = Math.min(2, S.slow + 1);
     if (lp && (cmd === "repeat" || cmd === "slower")) await speak(lp.text, L().bcp, targetRate());
@@ -925,6 +969,8 @@ Write ${name}'s next turn. Return only a JSON object:
     begin();
   };
   $("start").onclick = () => { go("talk"); renderTrip(); begin(); };
+  function restart() { resetConversation(); begin(); }
+  $("c-restart").onclick = restart;
   $("c-repeat").onclick = () => { stopListening(); runCommand("repeat"); };
   $("c-en").onclick = () => { const lp = lastPartner(); if (!lp) return; const m = [...$("log").querySelectorAll(".msg.partner")].pop(); if (m) { const en = m.querySelector(".en"); en.hidden = false; m.querySelector(".tools button").textContent = "Hide English"; } stopListening(); runCommand("english"); };
   $("c-hint").onclick = () => { const lp = lastPartner(); if (!lp || !lp.hint) return; $("typed").value = lp.hint; stopListening(); runCommand("help"); };
@@ -960,7 +1006,7 @@ Write ${name}'s next turn. Return only a JSON object:
   // One practice card per question the local asks, with every answer that works for it.
   function scriptItems() {
     return FREE[S.scene].steps.map((st) => ({
-      q: st.p[S.lang], q_en: fillEn(st.en),
+      q: lineOf(st).p, q_en: fillEn(lineOf(st).en),
       answers: (st.o || []).filter((o) => !o.stay).map((o) => ({ en: fillEn(o.en), target: o.say[S.lang] })),
     }));
   }
