@@ -16,7 +16,7 @@ Launch languages: Spanish (Madrid), French (Paris), Italian (Rome), Portuguese (
 ## Building it in stages
 **Stage 1: prototype (done, in `prototype/`).** A web page that already does the full loop above. It runs inside Claude as a private page, where the local talks and you type back, because pages inside Claude can't use the microphone. The same file also works as a normal website on your phone with the microphone, once it's hosted somewhere (see "Decisions").
 
-**Stage 2: real phone app.** Built with Expo (React Native), so one codebase makes both the iPhone and Android app. What a real app adds over the website:
+**Stage 2: real phone app (started, in `mobile/`).** The AI partner is the phone's own built-in AI (Apple Intelligence on iPhone, Gemini Nano on Android), which is free for everyone; phones without it use the free scenes. Built with Expo (React Native), so one codebase makes both the iPhone and Android app. What a real app adds over the website:
 - keeps listening with the screen locked and through car Bluetooth, which a website can't do reliably;
 - better voices (the phone's own voices for now, natural-sounding voices later);
 - saves your progress, words you struggled with, and streaks;

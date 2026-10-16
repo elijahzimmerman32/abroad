@@ -188,6 +188,7 @@ h2 { font: 700 13px/1.2 var(--font-body); text-transform: uppercase; letter-spac
       <button id="mode-ai">AI partner</button>
     </div>
     <p class="note" id="mode-note"></p>
+    <button class="ghost" id="ai-download" hidden>Download the phone's AI</button>
 
     <h2>Hands-free</h2>
     <div class="opt"><input type="checkbox" id="opt-hands" checked><label for="opt-hands"><b>Listen automatically</b><small>After the local speaks, the mic opens on its own. Say "repeat", "slower", "help", "skip", "start over" or "stop" any time, in English or your new language.</small></label></div>
@@ -619,6 +620,11 @@ h2 { font: 700 13px/1.2 var(--font-body); text-transform: uppercase; letter-spac
   };
   let sample = null, rec = null, noSpeech = 0, wakeLock = null, turnId = 0;
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  // In the phone app, the AI partner is the AI built into the phone: free, private, no account.
+  // Phones without it (or languages it doesn't speak) get the free scenes instead.
+  const PHONE = window.AbroadNative || null;
+  let phoneAI = null;  // what the phone's AI can do for the chosen language: { status, reason, preview }
+  const aiOn = () => S.mode === "ai" && (!PHONE || (!!phoneAI && phoneAI.status === "available"));
   const $ = (id) => document.getElementById(id);
   const L = () => LANGS[S.lang], SC = () => SCENES.find((s) => s.id === S.scene) || SCENES[0], LV = () => LEVELS.find((l) => l.id === S.level) || LEVELS[0];
   const partnerName = () => L().names[SCENES.indexOf(SC()) % 2];
@@ -631,7 +637,7 @@ h2 { font: 700 13px/1.2 var(--font-body); text-transform: uppercase; letter-spac
       b.className = "lang"; b.setAttribute("aria-pressed", String(k === S.lang));
       b.innerHTML = `<span class="iata"></span><span class="city"></span><span class="sub"></span>`;
       b.children[0].textContent = l.iata; b.children[1].textContent = l.city; b.children[2].textContent = `${l.name} · ${l.hello}`;
-      b.onclick = () => { S.lang = k; store.set("lang", k); resetConversation(); renderTrip(); };
+      b.onclick = () => { S.lang = k; store.set("lang", k); resetConversation(); renderTrip(); checkPhoneAI(); };
       $("langs").append(b);
     }
     $("scenes").innerHTML = "";
@@ -659,9 +665,12 @@ h2 { font: 700 13px/1.2 var(--font-body); text-transform: uppercase; letter-spac
     $("opt-tips").checked = S.tipsAloud;
     $("mode-free").setAttribute("aria-pressed", String(S.mode !== "ai"));
     $("mode-ai").setAttribute("aria-pressed", String(S.mode === "ai"));
-    $("conn").hidden = S.mode !== "ai" || !!sample;
+    $("mode-ai").textContent = PHONE ? "Phone's AI" : "AI partner";
+    $("conn").hidden = S.mode !== "ai" || !!sample || !!PHONE;
+    $("ai-download").hidden = !(PHONE && S.mode === "ai" && phoneAI && phoneAI.status === "downloadable");
     $("mode-note").textContent = S.mode !== "ai"
       ? "Free, no account needed. The local follows a script for each scene, so they understand the answers that scene expects. Say \"help\" any time to hear one."
+      : PHONE ? phoneNote()
       : sample ? "The AI partner understands whatever you say, keeps the chat going, and corrects your mistakes."
       : "The AI partner understands whatever you say and corrects your mistakes. It needs your Anthropic API key, which is a paid account.";
     $("start").textContent = S.history.length ? "Continue the conversation" : "Start the conversation";
@@ -672,6 +681,35 @@ h2 { font: 700 13px/1.2 var(--font-body); text-transform: uppercase; letter-spac
   $("opt-key").value = S.apiKey;
   $("mode-free").onclick = () => { S.mode = "free"; store.set("mode", "free"); resetConversation(); renderTrip(); };
   $("mode-ai").onclick = () => { S.mode = "ai"; store.set("mode", "ai"); resetConversation(); renderTrip(); };
+
+  function phoneNote() {
+    const a = phoneAI, fallback = " Until then you'll get the free scenes, which work the same way with a script.";
+    if (!a) return "Checking whether this phone has built-in AI…";
+    if (a.status === "available") return "Uses the AI built into this phone. It's free, stays on your phone, understands whatever you say, and corrects your mistakes."
+      + (a.preview ? " Google is still testing it in languages other than English, so it may make mistakes." : "");
+    if (a.status === "downloadable") return "Your phone can download its built-in AI for free. Tap the button below." + fallback;
+    if (a.status === "downloading") return "Your phone is still getting its built-in AI ready." + fallback;
+    if (a.reason === "language") return `The AI built into this phone doesn't speak ${L().name} yet, so you'll get the free scenes for ${L().city}.`;
+    if (a.reason === "off") return "Turn on Apple Intelligence in Settings, under Apple Intelligence & Siri, to use the phone's AI." + fallback;
+    if (a.reason === "os") return "The phone's AI needs iOS 26 or newer. Update in Settings, under General, Software Update." + fallback;
+    return "This phone doesn't have built-in AI, so you'll get the free scenes. They work the same way, with a script for each scene.";
+  }
+  async function checkPhoneAI() {
+    if (!PHONE) return;
+    const lang = S.lang, before = aiOn();
+    let a;
+    try { a = await PHONE.ai.availability(L().bcp); } catch { a = { status: "unavailable", reason: "device" }; }
+    if (lang !== S.lang) return;
+    phoneAI = a;
+    if (before !== aiOn() && !S.active) resetConversation();
+    renderTrip();
+  }
+  $("ai-download").onclick = async () => {
+    const b = $("ai-download"); b.disabled = true; b.textContent = "Downloading…";
+    try { await PHONE.ai.download(); } catch (e) { $("mode-note").textContent = (e && e.message) || "The download didn't work. Try again later."; }
+    b.disabled = false; b.textContent = "Download the phone's AI";
+    checkPhoneAI();
+  };
 
   function showMicNote(text) { const n = $("mic-note"); n.textContent = text; n.hidden = !text; n.className = "note warn"; }
   if (!SR) showMicNote("This browser can't listen to speech, so you'll type your answers. The local still speaks out loud. On iPhone use Safari, on Android use Chrome.");
@@ -689,6 +727,7 @@ h2 { font: 700 13px/1.2 var(--font-body); text-transform: uppercase; letter-spac
   // ---------- Claude ----------
   async function initClaude() {
     try { if (window.claude && window.claude.use) sample = await window.claude.use("sample"); } catch { sample = null; }
+    if (PHONE) { await checkPhoneAI(); if (!S.mode) S.mode = phoneAI && phoneAI.status === "available" ? "ai" : "free"; }
     if (!S.mode) S.mode = sample || S.apiKey ? "ai" : "free";
     renderTrip();
   }
@@ -697,7 +736,19 @@ h2 { font: 700 13px/1.2 var(--font-body); text-transform: uppercase; letter-spac
     if (a < 0 || b <= a) throw { code: "bad_json", message: "The reply wasn't in the expected shape." };
     return JSON.parse(text.slice(a, b + 1));
   }
-  async function askClaude(prompt) {
+  // Small on-device models sometimes skip the JSON, so try twice, then use their words as the reply.
+  async function askPhone(prompt, maxTokens) {
+    let text = "";
+    for (let i = 0; i < 2; i++) {
+      text = await PHONE.ai.generate(prompt, maxTokens || 400);
+      try { return parseJSON(text); } catch {}
+    }
+    const plain = String(text || "").replace(/```[a-z]*|```/g, "").trim();
+    if (plain) return { reply: plain, translation: "", correction: null, hint: "", hint_en: "" };
+    throw { code: "bad_json", message: "The phone's AI gave an empty answer. Tap the circle to try again." };
+  }
+  async function askClaude(prompt, maxTokens) {
+    if (PHONE) return askPhone(prompt, maxTokens);
     if (sample) {
       try { return await sample.json(prompt, { modelTier: "quick", cache: false }); }
       catch (e) { if (e && e.text) { try { return parseJSON(e.text); } catch {} } throw e; }
@@ -768,7 +819,8 @@ h2 { font: 700 13px/1.2 var(--font-body); text-transform: uppercase; letter-spac
 
   function conversationPrompt() {
     const l = L(), s = SC(), lv = LV(), name = partnerName();
-    const lines = S.history.map((t) => (t.who === "partner" ? `${name}: ${t.text}` : `Traveler: ${t.text}`)).join("\n");
+    // On-device models have a small memory, so they get the last part of the conversation.
+    const lines = (PHONE ? S.history.slice(-12) : S.history).map((t) => (t.who === "partner" ? `${name}: ${t.text}` : `Traveler: ${t.text}`)).join("\n");
     return `You are ${name}, a ${s.role} in ${l.city}, ${l.country}. The scene: ${s.desc}
 You are talking out loud with a traveler who is learning ${l.name}. Their level: ${lv.label} (${lv.cefr}). ${lv.rule}
 How to play the part:
@@ -846,7 +898,8 @@ Write ${name}'s next turn. Return only a JSON object:
     me.onerror = (e) => {
       if (e.error === "not-allowed" || e.error === "service-not-allowed" || e.error === "audio-capture") {
         S.micBlocked = true; S.handsFree = false;
-        showMicNote("The microphone isn't available here, so type your answers below. The local still speaks out loud. The full hands-free version runs from its own web address.");
+        showMicNote(PHONE ? "Abroad can't use the microphone. Allow it for Abroad in your phone's Settings, or type your answers below."
+          : "The microphone isn't available here, so type your answers below. The local still speaks out loud. The full hands-free version runs from its own web address.");
         $("stage-hint").textContent = "The mic is off here. Type your answer below.";
       }
     };
@@ -897,7 +950,7 @@ Write ${name}'s next turn. Return only a JSON object:
     const my = ++turnId;
     setStatus("thinking");
     let t;
-    if (S.mode !== "ai") {
+    if (!aiOn()) {
       const last = S.history[S.history.length - 1];
       t = skip ? freeTurn("skip", true) : freeTurn(last && last.who === "me" ? last.text : null);
     } else try { t = await askClaude(conversationPrompt()); }
@@ -937,7 +990,7 @@ Write ${name}'s next turn. Return only a JSON object:
   async function runCommand(cmd) {
     const lp = lastPartner(); const my = ++turnId;
     if (cmd === "stop") { S.active = false; setStatus("paused"); await speak("Paused.", "en-US", 1); return; }
-    if (cmd === "skip" && S.mode !== "ai" && lp) return partnerTurn(true);
+    if (cmd === "skip" && !aiOn() && lp) return partnerTurn(true);
     if (cmd === "restart") return restart();
     setStatus("speaking");
     if (cmd === "slower") S.slow = Math.min(2, S.slow + 1);
@@ -957,7 +1010,7 @@ Write ${name}'s next turn. Return only a JSON object:
 
   function begin() {
     unlockAudio(); keepAwake();
-    if (S.mode !== "ai" && S.freeDone) resetConversation();
+    if (!aiOn() && S.freeDone) resetConversation();
     S.active = S.handsFree && !!SR && !S.micBlocked; noSpeech = 0;
     const last = S.history[S.history.length - 1];
     if (!last || last.who === "me") return partnerTurn();
@@ -981,7 +1034,7 @@ Write ${name}'s next turn. Return only a JSON object:
     S.active = S.handsFree && !!SR && !S.micBlocked;
     handleUser(v);
   };
-  window.addEventListener("visibilitychange", () => { if (!document.hidden && S.active) keepAwake(); });
+  window.addEventListener("visibilitychange", () => { if (!document.hidden && S.active) keepAwake(); if (!document.hidden && !S.active) checkPhoneAI(); });
 
   // ---------- Practice ----------
   const GR = { α:"a",β:"v",γ:"g",δ:"d",ε:"e",ζ:"z",η:"i",θ:"th",ι:"i",κ:"k",λ:"l",μ:"m",ν:"n",ξ:"x",ο:"o",π:"p",ρ:"r",σ:"s",ς:"s",τ:"t",υ:"y",φ:"f",χ:"ch",ψ:"ps",ω:"o" };
@@ -1012,7 +1065,7 @@ Write ${name}'s next turn. Return only a JSON object:
     }));
   }
   function practiceItems() {
-    if (S.mode === "ai" && S.practice && S.practiceKey === S.lang + ":" + S.scene) return S.practice;
+    if (aiOn() && S.practice && S.practiceKey === S.lang + ":" + S.scene) return S.practice;
     return scriptItems();
   }
   // Grade against the chosen answer, but count any other answer for that question as right too.
@@ -1041,7 +1094,7 @@ Write ${name}'s next turn. Return only a JSON object:
   }
   function renderPractice() {
     const items = practiceItems();
-    $("p-new").hidden = S.mode !== "ai";
+    $("p-new").hidden = !aiOn();
     $("p-status").hidden = true;
     $("p-lede").textContent = `"${SC().title}" in ${L().name}. Each card is a question ${partnerName()} asks. Pick an answer, then type it or say it. Any answer that fits the question counts.`;
     $("cards").innerHTML = "";
@@ -1097,7 +1150,7 @@ Write ${name}'s next turn. Return only a JSON object:
       const out = await askClaude(`Write 5 questions a local might ask a traveler in this situation in ${l.city}, ${l.country}: ${s.desc}
 For each question, give 3 different short answers the traveler could give.
 Level: ${lv.label} (${lv.cefr}). ${lv.rule}${S.lang === "pt" ? " Use European Portuguese." : ""}
-Return only JSON: {"items": [{"q": "the question in ${l.name}", "q_en": "the question in English", "answers": [{"en": "an answer in English", "target": "that answer in ${l.name}"}]}]}`);
+Return only JSON: {"items": [{"q": "the question in ${l.name}", "q_en": "the question in English", "answers": [{"en": "an answer in English", "target": "that answer in ${l.name}"}]}]}`, 1200);
       const items = (out.items || []).filter((x) => x.q && Array.isArray(x.answers))
         .map((x) => ({ q: x.q, q_en: x.q_en || "", answers: x.answers.filter((a) => a.en && a.target).slice(0, 5) }))
         .filter((x) => x.answers.length).slice(0, 8);

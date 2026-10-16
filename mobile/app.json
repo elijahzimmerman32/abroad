@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "Abroad",
+    "slug": "abroad",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#F3F4F1",
+    "ios": {
+      "bundleIdentifier": "com.elijahzimmerman.abroad",
+      "supportsTablet": true,
+      "infoPlist": {
+        "UIBackgroundModes": ["audio"],
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.elijahzimmerman.abroad",
+      "adaptiveIcon": {
+        "backgroundColor": "#15181C",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Abroad listens to your answers so you can talk with the local out loud.",
+          "speechRecognitionPermission": "Abroad turns what you say into text so the local can understand you.",
+          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox", "com.google.android.as"]
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": { "minSdkVersion": 26, "kotlinVersion": "2.2.21" }
+        }
+      ]
+    ]
+  }
+}

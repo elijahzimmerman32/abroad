@@ -1,0 +1,77 @@
+# Builds the phone app on every change, for free on GitHub's computers.
+# Android: makes an installable APK and puts it on the "android-preview" release page.
+# iPhone: checks that the iPhone code compiles (installing on an iPhone needs an Apple developer account).
+name: Phone app
+
+on:
+  push:
+    paths: ["mobile/**", "app.html", ".github/workflows/phone-app.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: phone-app-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: 17
+      - run: npm ci
+      - run: npm run sync-web
+      - run: npx tsc --noEmit
+      - run: npx expo prebuild --platform android --no-install
+      - name: Build the APK
+        working-directory: mobile/android
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
+      - run: cp android/app/build/outputs/apk/release/app-release.apk ../Abroad.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Abroad-android
+          path: Abroad.apk
+      - name: Publish to the android-preview release
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view android-preview >/dev/null 2>&1 || \
+            gh release create android-preview --prerelease --title "Abroad for Android (preview)" \
+              --notes "Open this page on your Android phone, tap Abroad.apk to download it, then open the file to install. Built automatically from the latest code."
+          gh release upload android-preview Abroad.apk --clobber
+
+  ios:
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+      - run: npm run sync-web
+      - run: npx expo prebuild --platform ios
+      - name: Compile for the iPhone simulator
+        run: |
+          xcodebuild -version
+          xcodebuild -workspace ios/Abroad.xcworkspace -scheme Abroad -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build | tail -n 80
+          exit ${PIPESTATUS[0]}
