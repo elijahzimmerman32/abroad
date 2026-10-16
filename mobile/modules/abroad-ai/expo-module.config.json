@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["AbroadAiModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.abroadai.AbroadAiModule"]
+  }
+}
